@@ -92,9 +92,16 @@ ESG EVALUATION:
 - Evaluate human-readable ESG summaries
 
 RESPONSE HANDLING:
-- JSON responses = Structured offers ready for evaluation
-- Text responses = Bank needs more information or has questions
+- JSON responses = Structured offers ready for evaluation (call evaluate_offers and select_best_offer)
+- Text responses = Bank needs more information or has questions (call handle_bank_questions)
 - Always inform the user about the type of response received
+- When banks ask questions, ask the user for the requested information
+
+RESPONSE HANDLING WORKFLOW:
+1. After sending intent to broker, check the response
+2. If you receive bank_questions, call handle_bank_questions tool
+3. If you receive offers, call evaluate_offers and select_best_offer
+4. Always communicate clearly with the user about what happened
 
 Always provide clear communication about JWT validation status and offer evaluation reasoning.
             """,
@@ -103,6 +110,7 @@ Always provide clear communication about JWT validation status and offer evaluat
                 self.send_credit_request_to_broker,
                 self.evaluate_offers,
                 self.select_best_offer,
+                self.handle_bank_questions,
                 self.negotiate_offer,
             ],
         )
@@ -230,34 +238,65 @@ Always provide clear communication about JWT validation status and offer evaluat
         if response.status_code == 200:
             broker_response = response.json()
             
-            # Extract offers from broker response - use correct A2A format
+            # Extract offers and text responses from broker response - use correct A2A format
             if "result" in broker_response and "artifacts" in broker_response["result"]:
                 artifacts = broker_response["result"]["artifacts"]
                 for artifact in artifacts:
                     if artifact and "parts" in artifact:
                         for part in artifact["parts"]:
                             if part.get("kind") == "text" and "text" in part:
-                                try:
-                                    broker_data = json.loads(part["text"])
-                                    if "aggregated_result" in broker_data:
-                                        offers = broker_data["aggregated_result"].get("offers", [])
-                                        self.received_offers = offers
-                                        
+                                response_text = part["text"]
+                                
+                                # Check if it contains structured data
+                                if "--- STRUCTURED DATA ---" in response_text:
+                                    # Extract human-readable part and structured data
+                                    parts = response_text.split("--- STRUCTURED DATA ---")
+                                    human_response = parts[0].strip()
+                                    structured_data = parts[1].strip() if len(parts) > 1 else ""
+                                    
+                                    try:
+                                        broker_data = json.loads(structured_data)
+                                        if "aggregated_result" in broker_data:
+                                            offers = broker_data["aggregated_result"].get("offers", [])
+                                            text_responses = broker_data["aggregated_result"].get("text_responses", [])
+                                            self.received_offers = offers
+                                            
+                                            # Handle text responses from banks
+                                            bank_questions = []
+                                            for text_resp in text_responses:
+                                                bank_questions.append({
+                                                    "bank": text_resp["bank"],
+                                                    "question": text_resp["response"]
+                                                })
+                                            
+                                            return {
+                                                "status": "success",
+                                                "jwt_signed": True,
+                                                "broker_response": broker_data,
+                                                "offers_received": len(offers),
+                                                "text_responses_received": len(text_responses),
+                                                "offers": offers,
+                                                "bank_questions": bank_questions,
+                                                "human_response": human_response,
+                                                "message": f"Successfully sent JWT-signed intent to broker. Received {len(offers)} offers and {len(text_responses)} text responses from banks."
+                                            }
+                                    except json.JSONDecodeError:
+                                        # If structured data parsing fails, return human response
                                         return {
                                             "status": "success",
                                             "jwt_signed": True,
-                                            "broker_response": broker_data,
-                                            "offers_received": len(offers),
-                                            "offers": offers,
-                                            "message": f"Successfully sent JWT-signed intent to broker and received {len(offers)} offers"
+                                            "broker_response": {"text_response": response_text},
+                                            "human_response": response_text,
+                                            "message": f"Broker response: {response_text}"
                                         }
-                                except json.JSONDecodeError:
-                                    # If it's not JSON, treat as plain text response
+                                else:
+                                    # Plain text response without structured data
                                     return {
                                         "status": "success",
                                         "jwt_signed": True,
-                                        "broker_response": {"text_response": part["text"]},
-                                        "message": f"Broker response: {part['text']}"
+                                        "broker_response": {"text_response": response_text},
+                                        "human_response": response_text,
+                                        "message": f"Broker response: {response_text}"
                                     }
             
             return {
@@ -389,6 +428,51 @@ Always provide clear communication about JWT validation status and offer evaluat
             return {
                 "status": "error",
                 "error": f"Failed to select best offer: {str(e)}"
+            }
+
+    def handle_bank_questions(
+        self,
+        bank_questions_data: str,
+        tool_context: ToolContext = None
+    ) -> Dict[str, Any]:
+        """Handle questions from banks and ask user for more information."""
+        try:
+            # Parse bank questions data
+            if isinstance(bank_questions_data, str):
+                bank_questions = json.loads(bank_questions_data)
+            else:
+                bank_questions = bank_questions_data
+            
+            if not isinstance(bank_questions, list):
+                return {
+                    "status": "error",
+                    "error": "Invalid bank questions format"
+                }
+            
+            # Compile all questions from banks
+            questions_summary = []
+            for question in bank_questions:
+                bank_name = question.get("bank", "Unknown Bank")
+                question_text = question.get("question", "")
+                questions_summary.append(f"🏦 {bank_name.upper()}: {question_text}")
+            
+            # Create comprehensive response for user
+            user_message = "The banks have requested additional information to process your loan application:\n\n"
+            user_message += "\n".join(questions_summary)
+            user_message += "\n\nPlease provide the requested information so I can send it to the banks and get you proper loan offers."
+            
+            return {
+                "status": "success",
+                "bank_questions_count": len(bank_questions),
+                "questions_summary": questions_summary,
+                "user_message": user_message,
+                "message": f"Received {len(bank_questions)} questions from banks. Please provide the requested information."
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to handle bank questions: {str(e)}"
             }
 
     def negotiate_offer(

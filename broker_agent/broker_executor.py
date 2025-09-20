@@ -136,6 +136,7 @@ class BrokerAgentExecutor(AgentExecutor):
     async def _aggregate_responses(self, bank_responses: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate and validate bank responses"""
         valid_offers = []
+        text_responses = []
         errors = []
         
         for response in bank_responses:
@@ -158,6 +159,11 @@ class BrokerAgentExecutor(AgentExecutor):
                                             })
                                         except json.JSONDecodeError:
                                             # If it's not JSON, treat as text response
+                                            text_responses.append({
+                                                "bank": response["bank"],
+                                                "response": part["text"],
+                                                "type": "text_response"
+                                            })
                                             await self._log_audit("text_response_received", {
                                                 "bank": response["bank"],
                                                 "response": part["text"][:100] + "..."
@@ -175,9 +181,10 @@ class BrokerAgentExecutor(AgentExecutor):
         
         return {
             "offers": valid_offers,
+            "text_responses": text_responses,
             "errors": errors,
             "total_banks": len(bank_responses),
-            "successful_responses": len(valid_offers),
+            "successful_responses": len(valid_offers) + len(text_responses),
             "failed_responses": len(errors)
         }
 
@@ -226,7 +233,7 @@ class BrokerAgentExecutor(AgentExecutor):
             # Aggregate responses
             aggregated_result = await self._aggregate_responses(bank_responses)
             
-            # Create response message
+            # Create response message with both offers and text responses
             response_data = {
                 "status": "success",
                 "message_routed": True,
@@ -238,7 +245,22 @@ class BrokerAgentExecutor(AgentExecutor):
                 }
             }
             
-            response_text = json.dumps(response_data, indent=2)
+            # Create a human-readable response that includes text responses
+            human_response = "Broker routing completed. "
+            
+            if aggregated_result["text_responses"]:
+                human_response += f"Received {len(aggregated_result['text_responses'])} text responses from banks:\n\n"
+                for text_resp in aggregated_result["text_responses"]:
+                    human_response += f"🏦 {text_resp['bank'].upper()}:\n{text_resp['response']}\n\n"
+            
+            if aggregated_result["offers"]:
+                human_response += f"Received {len(aggregated_result['offers'])} structured offers from banks.\n"
+            
+            if aggregated_result["errors"]:
+                human_response += f"Encountered {len(aggregated_result['errors'])} errors from banks.\n"
+            
+            # Include both human-readable and structured data
+            response_text = f"{human_response}\n\n--- STRUCTURED DATA ---\n{json.dumps(response_data, indent=2)}"
             
             # Send final result
             await event_queue.enqueue_event(
