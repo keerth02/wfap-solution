@@ -1,13 +1,13 @@
 # Wells Fargo Agent Protocol (WFAP) - Complete Implementation
 
-A comprehensive implementation of the Wells Fargo Agent Protocol using Google's Agent Development Kit (ADK) and A2A communication protocol. This system enables AI agents to handle corporate credit requests with JWT-signed communications, ESG evaluation, and automated offer comparison.
+A comprehensive implementation of the Wells Fargo Agent Protocol using Google's Agent Development Kit (ADK) and A2A communication protocol. This system enables AI agents to handle corporate credit requests with structured communications, ESG evaluation, and automated offer comparison.
 
 ## 🏗️ Architecture Overview
 
 The WFAP system consists of four main components:
 
 ```
-Company Agent → [JWT Sign] → Broker Agent → [Pure Routing] → Bank Agents → [JWT Validate] → Process Request
+Company Agent → [Structured Intent] → Broker Agent → [Pure Routing] → Bank Agents → [Generate Offers] → Process Request
 ```
 
 ### Components:
@@ -79,10 +79,31 @@ cd boa_agent
 uv run python __main__.py --port 8002
 ```
 
-**Terminal 4 - Company Agent:**
+**Terminal 4 - Company Agent (Using ADK Web):**
 ```bash
-cd company_agent
-uv run python __main__.py --port 8003
+# From the wfap-solution directory
+adk web --port 8003
+```
+
+### Alternative: Start All Servers Except Company Agent
+
+If you want to start all servers except the company agent (for testing purposes):
+
+```bash
+# Start broker agent
+cd broker_agent && uv run python __main__.py --port 8000 &
+
+# Start Wells Fargo agent  
+cd wells_fargo_agent && uv run python __main__.py --port 8001 &
+
+# Start Bank of America agent
+cd boa_agent && uv run python __main__.py --port 8002 &
+```
+
+Then use ADK Web for the company agent:
+```bash
+# From the wfap-solution directory
+adk web --port 8003
 ```
 
 ### Verify Agents Are Running
@@ -162,19 +183,20 @@ curl -X POST http://localhost:8001 \
 
 ## 🔐 Security Features
 
-### JWT Signing and Validation
+### Enhanced Business Logic
 
-- **Company Agent**: Signs all credit intents with JWT
-- **Bank Agents**: Validate company JWTs before processing
-- **Shared Keys**: Synchronized key system across all agents
-- **Audit Trail**: Complete logging of all JWT operations
+- **Company Agent**: Creates structured credit intents and evaluates offers based on comprehensive criteria
+- **Bank Agents**: Generate complete structured offers with all required fields
+- **Broker Agent**: Pure message router for efficient communication
+- **Audit Trail**: Complete logging of all agent operations
 
-### Key Management
+### Offer Evaluation Criteria
 
-Keys are managed in `shared_keys.py`:
-- `company-agent-1`: Company signing key
-- `wells-fargo`: Wells Fargo signing key  
-- `bank-of-america`: Bank of America signing key
+The company agent evaluates offers based on:
+- **Primary**: Composite Score (ESG-adjusted effective rate + risk penalties)
+- **Secondary**: ESG Impact Score (ESG score + carbon footprint reduction bonus)
+- **Financial Analysis**: Effective rate (including fees), total cost of borrowing, monthly payments
+- **Risk Assessment**: Collateral requirements, personal guarantee, prepayment penalties
 
 ## 📊 Protocol Definitions
 
@@ -218,7 +240,7 @@ Keys are managed in `shared_keys.py`:
   },
   "repayment_schedule": [...],
   "created_at": "2024-01-01T00:00:00Z",
-  "jwt_signed": true
+  "offer_complete": true
 }
 ```
 
@@ -240,13 +262,13 @@ Keys are managed in `shared_keys.py`:
 ## 🔄 Communication Flow
 
 1. **Company Agent** receives natural language credit request
-2. **Company Agent** creates structured credit intent and signs with JWT
-3. **Company Agent** sends JWT-signed intent to Broker Agent
+2. **Company Agent** creates structured credit intent
+3. **Company Agent** sends structured intent to Broker Agent
 4. **Broker Agent** routes message to all bank agents
-5. **Bank Agents** validate JWT and generate offers
-6. **Bank Agents** sign offers with their own JWTs
-7. **Broker Agent** aggregates responses
-8. **Company Agent** receives offers and selects best one
+5. **Bank Agents** generate complete structured offers with all fields
+6. **Broker Agent** aggregates responses from all banks
+7. **Company Agent** receives offers and evaluates them using comprehensive criteria
+8. **Company Agent** selects best offer based on composite score and ESG impact
 
 ## 🛠️ Development
 
@@ -254,8 +276,7 @@ Keys are managed in `shared_keys.py`:
 
 ```
 wfap-solution/
-├── protocols/           # Protocol definitions (Intent, Response, JWT)
-├── shared_keys.py       # Shared JWT keys for all agents
+├── protocols/           # Protocol definitions (Intent, Response)
 ├── broker_agent/        # Pure message router
 ├── company_agent/       # Credit request handler
 ├── wells_fargo_agent/   # Conservative bank agent
@@ -266,9 +287,9 @@ wfap-solution/
 ### Adding New Bank Agents
 
 1. Create new agent directory following existing pattern
-2. Add to `shared_keys.py` with new key pair
-3. Update broker agent endpoints in `broker_executor.py`
-4. Implement bank-specific policies and ESG criteria
+2. Update broker agent endpoints in `broker_executor.py`
+3. Implement bank-specific policies and ESG criteria
+4. Ensure complete structured offer generation with all required fields
 
 ### Customizing Bank Policies
 
@@ -299,9 +320,9 @@ sleep 2
 - Wait 15-30 seconds and retry
 - Check your API key and quota limits
 
-**JWT Validation Errors:**
-- Ensure all agents are using shared keys from `shared_keys.py`
-- Restart all agents after key changes
+**Offer Evaluation Errors:**
+- Ensure bank agents are generating complete structured offers
+- Check that all required fields are populated in the response protocol
 
 **Agent Not Responding:**
 - Check agent logs for errors
@@ -321,7 +342,7 @@ export GEMINI_MODEL=gemini-2.0-flash-001
 - **Response Time**: 5-15 seconds for complete workflow
 - **Concurrent Requests**: Supports multiple simultaneous requests
 - **Scalability**: Easy to add new bank agents
-- **Reliability**: JWT validation ensures message integrity
+- **Reliability**: Structured offer validation ensures data integrity
 
 ## 🔮 Future Enhancements
 
@@ -338,10 +359,11 @@ This project is part of the Wells Fargo Agent Protocol implementation for hackat
 ## 🤝 Contributing
 
 1. Follow the existing code structure
-2. Maintain JWT signing/validation patterns
+2. Maintain comprehensive offer evaluation patterns
 3. Add comprehensive error handling
 4. Update documentation for new features
 5. Test all agent interactions thoroughly
+6. Ensure complete structured offer generation
 
 ---
 
