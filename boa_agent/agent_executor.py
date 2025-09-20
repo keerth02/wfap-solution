@@ -1,6 +1,8 @@
 """Bank of America Agent Executor for A2A Protocol"""
 import sys
 import os
+import json
+from datetime import datetime
 from typing import override
 
 # Add parent directory to path for protocols import
@@ -33,6 +35,13 @@ class BOAAgentExecutor(AgentExecutor):
         query = context.get_user_input()
         task = context.current_task
 
+        # Enhanced logging for Bank of America
+        print(f"🏦 BANK OF AMERICA RECEIVED REQUEST:")
+        print(f"   📏 Length: {len(query)} characters")
+        print(f"   📄 Content: {query}")
+        print(f"   🕐 Time: {datetime.utcnow().isoformat()}")
+        print(f"   🆔 Task ID: {task.id if task else 'unknown'}")
+
         if not context.message:
             raise Exception('No message provided')
 
@@ -45,8 +54,12 @@ class BOAAgentExecutor(AgentExecutor):
                 # Handle tool results properly - convert to JSON if it's a dict
                 content = event['content']
                 if isinstance(content, dict):
-                    import json
                     content = json.dumps(content, indent=2)
+                
+                print(f"✅ BANK OF AMERICA RESPONSE GENERATED:")
+                print(f"   📊 Content Type: {type(event['content'])}")
+                print(f"   📄 Response: {content}")
+                print(f"   🕐 Time: {datetime.utcnow().isoformat()}")
                 
                 await event_queue.enqueue_event(
                     TaskArtifactUpdateEvent(

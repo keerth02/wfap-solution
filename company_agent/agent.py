@@ -524,3 +524,4 @@ Always provide clear communication about JWT validation status and offer evaluat
                     'is_task_complete': False,
                     'require_user_input': False,
                 }
+root_agent = CompanyAgent()._agent

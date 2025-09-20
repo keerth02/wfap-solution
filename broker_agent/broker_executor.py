@@ -37,14 +37,16 @@ class BrokerAgentExecutor(AgentExecutor):
         self.audit_log = []
 
     async def _log_audit(self, action: str, details: Dict[str, Any] = None):
-        """Log audit trail"""
+        """Log audit trail with detailed information"""
         audit_entry = {
             "timestamp": datetime.utcnow().isoformat(),
             "action": action,
             "details": details or {}
         }
         self.audit_log.append(audit_entry)
-        print(f"🔍 AUDIT: {action} - {audit_entry['timestamp']}")
+        print(f"🔍 BROKER AUDIT: {action} - {audit_entry['timestamp']}")
+        if details:
+            print(f"   📋 Details: {json.dumps(details, indent=2)}")
 
     async def _route_to_banks(self, message_content: str) -> List[Dict[str, Any]]:
         """Route message content to all bank agents"""
@@ -84,10 +86,16 @@ class BrokerAgentExecutor(AgentExecutor):
                             "response": bank_response,
                             "status": "success"
                         })
-                        await self._log_audit("bank_routing", {
+                        
+                        print(f"✅ BROKER → {bank_name.upper()} SUCCESS:")
+                        print(f"   🌐 Endpoint: {endpoint}")
+                        print(f"   📊 Response: {json.dumps(bank_response, indent=2)}")
+                        
+                        await self._log_audit("bank_routing_success", {
                             "bank": bank_name,
                             "endpoint": endpoint,
-                            "status": "success"
+                            "status": "success",
+                            "response_preview": str(bank_response)[:200] + "..." if len(str(bank_response)) > 200 else str(bank_response)
                         })
                     else:
                         responses.append({
@@ -96,11 +104,18 @@ class BrokerAgentExecutor(AgentExecutor):
                             "status": "error",
                             "error": f"HTTP {response.status_code}"
                         })
+                        
+                        print(f"❌ BROKER → {bank_name.upper()} ERROR:")
+                        print(f"   🌐 Endpoint: {endpoint}")
+                        print(f"   🚫 Status: HTTP {response.status_code}")
+                        print(f"   📄 Response: {response.text}")
+                        
                         await self._log_audit("bank_routing_error", {
                             "bank": bank_name,
                             "endpoint": endpoint,
                             "status": "error",
-                            "error": f"HTTP {response.status_code}"
+                            "error": f"HTTP {response.status_code}",
+                            "response_text": response.text
                         })
                         
                 except Exception as e:
@@ -193,10 +208,16 @@ class BrokerAgentExecutor(AgentExecutor):
                 )
             )
 
-            # Log incoming message
+            # Log incoming message with full content
+            print(f"📨 BROKER RECEIVED MESSAGE:")
+            print(f"   📏 Length: {len(user_input)} characters")
+            print(f"   📄 Content: {user_input}")
+            print(f"   🕐 Time: {datetime.utcnow().isoformat()}")
+            
             await self._log_audit("message_received", {
                 "message_length": len(user_input),
-                "message_preview": user_input[:100] + "..." if len(user_input) > 100 else user_input
+                "message_content": user_input,
+                "task_id": task.id if task else "unknown"
             })
 
             # Route to banks (no JWT validation - banks will handle it)
