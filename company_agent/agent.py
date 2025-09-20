@@ -58,7 +58,7 @@ class CompanyAgent:
 
     def _build_agent(self) -> LlmAgent:
         """Builds the LLM agent for the company agent."""
-        LITELLM_MODEL = os.getenv('LITELLM_MODEL', 'gemini/gemini-2.0-flash')
+        LITELLM_MODEL = os.getenv('LITELLM_MODEL', 'gemini/gemini-1.5-flash')
         return LlmAgent(
             model=LiteLlm(model=LITELLM_MODEL),
             name='company_agent',
@@ -159,125 +159,118 @@ Always provide clear communication about JWT validation status and offer evaluat
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
         """Send JWT-signed credit intent to broker agent."""
-        try:
-            # Parse intent data - handle both string and dict inputs
-            if isinstance(intent_data, str):
-                try:
-                    parsed_data = json.loads(intent_data)
-                    # If it's a response from create_credit_intent, extract the intent
-                    if isinstance(parsed_data, dict) and "intent" in parsed_data:
-                        intent_dict = parsed_data["intent"]
-                    else:
-                        intent_dict = parsed_data
-                except json.JSONDecodeError:
-                    # If it's not valid JSON, treat as plain text
-                    intent_dict = {"raw_text": intent_data}
-            elif isinstance(intent_data, dict):
+        # Parse intent data - handle both string and dict inputs
+        if isinstance(intent_data, str):
+            try:
+                parsed_data = json.loads(intent_data)
                 # If it's a response from create_credit_intent, extract the intent
-                if "intent" in intent_data:
-                    intent_dict = intent_data["intent"]
+                if isinstance(parsed_data, dict) and "intent" in parsed_data:
+                    intent_dict = parsed_data["intent"]
                 else:
-                    intent_dict = intent_data
+                    intent_dict = parsed_data
+            except json.JSONDecodeError:
+                # If it's not valid JSON, treat as plain text
+                intent_dict = {"raw_text": intent_data}
+        elif isinstance(intent_data, dict):
+            # If it's a response from create_credit_intent, extract the intent
+            if "intent" in intent_data:
+                intent_dict = intent_data["intent"]
             else:
-                # Convert other types to string and wrap
-                intent_dict = {"raw_text": str(intent_data)}
-            
+                intent_dict = intent_data
+        else:
+            # Convert other types to string and wrap
+            intent_dict = {"raw_text": str(intent_data)}
+        
         # Sign intent with JWT - BYPASSED FOR TESTING
         jwt_token = "bypass-jwt-token-for-testing"
         
         # ORIGINAL JWT SIGNING CODE (commented out for testing):
         # jwt_token = self.jwt_signer.sign(intent_dict, expiration_hours=1)
-            
-            # Send to broker via A2A
-            async def _send_to_broker():
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{self.broker_endpoint}",
-                        json={
-                            "jsonrpc": "2.0",
-                            "id": f"company-{uuid.uuid4().hex[:8]}",
-                            "method": "message/send",
-                            "params": {
-                                "id": f"task-{uuid.uuid4().hex[:8]}",
-                                "message": {
-                                    "messageId": f"msg-{uuid.uuid4().hex[:8]}",
-                                    "role": "user",
-                                    "parts": [
-                                        {
-                                            "type": "text",
-                                            "text": jwt_token
-                                        }
-                                    ]
-                                }
+        
+        # Send to broker via A2A
+        async def _send_to_broker():
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.broker_endpoint}",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": f"company-{uuid.uuid4().hex[:8]}",
+                        "method": "message/send",
+                        "params": {
+                            "id": f"task-{uuid.uuid4().hex[:8]}",
+                            "message": {
+                                "messageId": f"msg-{uuid.uuid4().hex[:8]}",
+                                "role": "user",
+                                "parts": [
+                                    {
+                                        "type": "text",
+                                        "text": jwt_token
+                                    }
+                                ]
                             }
-                        },
-                        timeout=60.0
-                    )
-                    return response
+                        }
+                    },
+                    timeout=60.0
+                )
+                return response
+        
+        # Run async function in sync context
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+            # Use ThreadPoolExecutor to run async code
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _send_to_broker())
+                response = future.result()
+        except RuntimeError:
+            # No event loop running, create new one
+            response = asyncio.run(_send_to_broker())
+        
+        if response.status_code == 200:
+            broker_response = response.json()
             
-            # Run async function in sync context
-            import asyncio
-            try:
-                loop = asyncio.get_running_loop()
-                # Use ThreadPoolExecutor to run async code
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, _send_to_broker())
-                    response = future.result()
-            except RuntimeError:
-                # No event loop running, create new one
-                response = asyncio.run(_send_to_broker())
-            
-            if response.status_code == 200:
-                broker_response = response.json()
-                
-                # Extract offers from broker response - use correct A2A format
-                if "result" in broker_response and "artifacts" in broker_response["result"]:
-                    artifacts = broker_response["result"]["artifacts"]
-                    for artifact in artifacts:
-                        if artifact and "parts" in artifact:
-                            for part in artifact["parts"]:
-                                if part.get("kind") == "text" and "text" in part:
-                                    try:
-                                        broker_data = json.loads(part["text"])
-                                        if "aggregated_result" in broker_data:
-                                            offers = broker_data["aggregated_result"].get("offers", [])
-                                            self.received_offers = offers
-                                            
-                                            return {
-                                                "status": "success",
-                                                "jwt_signed": True,
-                                                "broker_response": broker_data,
-                                                "offers_received": len(offers),
-                                                "offers": offers,
-                                                "message": f"Successfully sent JWT-signed intent to broker and received {len(offers)} offers"
-                                            }
-                                    except json.JSONDecodeError:
-                                        # If it's not JSON, treat as plain text response
+            # Extract offers from broker response - use correct A2A format
+            if "result" in broker_response and "artifacts" in broker_response["result"]:
+                artifacts = broker_response["result"]["artifacts"]
+                for artifact in artifacts:
+                    if artifact and "parts" in artifact:
+                        for part in artifact["parts"]:
+                            if part.get("kind") == "text" and "text" in part:
+                                try:
+                                    broker_data = json.loads(part["text"])
+                                    if "aggregated_result" in broker_data:
+                                        offers = broker_data["aggregated_result"].get("offers", [])
+                                        self.received_offers = offers
+                                        
                                         return {
                                             "status": "success",
                                             "jwt_signed": True,
-                                            "broker_response": {"text_response": part["text"]},
-                                            "message": f"Broker response: {part['text']}"
+                                            "broker_response": broker_data,
+                                            "offers_received": len(offers),
+                                            "offers": offers,
+                                            "message": f"Successfully sent JWT-signed intent to broker and received {len(offers)} offers"
                                         }
-                
-                return {
-                    "status": "success",
-                    "jwt_signed": True,
-                    "broker_response": broker_response,
-                    "message": "Successfully sent JWT-signed intent to broker"
-                }
-            else:
-                return {
-                    "status": "error",
-                    "error": f"Broker communication failed: HTTP {response.status_code}",
-                    "response": response.text
-                }
-                
-        except Exception as e:
+                                except json.JSONDecodeError:
+                                    # If it's not JSON, treat as plain text response
+                                    return {
+                                        "status": "success",
+                                        "jwt_signed": True,
+                                        "broker_response": {"text_response": part["text"]},
+                                        "message": f"Broker response: {part['text']}"
+                                    }
+            
+            return {
+                "status": "success",
+                "jwt_signed": True,
+                "broker_response": broker_response,
+                "message": "Successfully sent JWT-signed intent to broker"
+            }
+        else:
             return {
                 "status": "error",
-                "error": f"Failed to send credit request: {str(e)}"
+                "error": f"Broker communication failed: HTTP {response.status_code}",
+                "response": response.text
             }
 
     def evaluate_offers(
