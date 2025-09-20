@@ -177,13 +177,11 @@ version = "0.1.0"
 source = { editable = "boa_agent" }
 dependencies = [
     { name = "a2a-sdk" },
-    { name = "cryptography" },
     { name = "google-adk" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "litellm" },
     { name = "pydantic" },
-    { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
@@ -191,13 +189,11 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.3.0" },
-    { name = "cryptography", specifier = ">=41.0.0" },
     { name = "google-adk", specifier = ">=1.8.0" },
     { name = "google-genai", specifier = ">=1.27.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "litellm", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
@@ -208,11 +204,9 @@ version = "0.1.0"
 source = { editable = "broker_agent" }
 dependencies = [
     { name = "a2a-sdk" },
-    { name = "cryptography" },
     { name = "google-adk" },
     { name = "httpx" },
     { name = "pydantic" },
-    { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
@@ -220,11 +214,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.3.0" },
-    { name = "cryptography", specifier = ">=41.0.0" },
     { name = "google-adk", specifier = ">=1.8.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic", specifier = ">=2.11.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
@@ -382,13 +374,11 @@ version = "0.1.0"
 source = { editable = "company_agent" }
 dependencies = [
     { name = "a2a-sdk" },
-    { name = "cryptography" },
     { name = "google-adk" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "litellm" },
     { name = "pydantic" },
-    { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
@@ -396,13 +386,11 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.3.0" },
-    { name = "cryptography", specifier = ">=41.0.0" },
     { name = "google-adk", specifier = ">=1.8.0" },
     { name = "google-genai", specifier = ">=1.27.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "litellm", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
@@ -2516,13 +2504,11 @@ version = "0.1.0"
 source = { editable = "wells_fargo_agent" }
 dependencies = [
     { name = "a2a-sdk" },
-    { name = "cryptography" },
     { name = "google-adk" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "litellm" },
     { name = "pydantic" },
-    { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
@@ -2530,13 +2516,11 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.3.0" },
-    { name = "cryptography", specifier = ">=41.0.0" },
     { name = "google-adk", specifier = ">=1.8.0" },
     { name = "google-genai", specifier = ">=1.27.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "litellm", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]

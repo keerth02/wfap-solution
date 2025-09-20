@@ -1,4 +1,4 @@
-"""Company Agent Implementation with JWT signing and A2A communication"""
+"""Company Agent Implementation with A2A communication"""
 import sys
 import os
 import json
@@ -21,15 +21,13 @@ from collections.abc import AsyncIterable
 
 from protocols.intent import CreditIntent, CompanyInfo
 from protocols.response import BankOffer, ESGImpact
-from protocols.jwt import JWTSigner
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from shared_keys import SHARED_KEYS
 import httpx
 
 class CompanyAgent:
-    """Company Agent for credit requests with JWT signing and A2A communication"""
+    """Company Agent for credit requests with A2A communication"""
 
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
 
@@ -44,8 +42,6 @@ class CompanyAgent:
             memory_service=InMemoryMemoryService(),
         )
         
-        # Initialize JWT signer with shared keys
-        self.jwt_signer = JWTSigner(SHARED_KEYS["company-agent-1"]["private"], "company-agent-1")
         
         # Broker endpoint
         self.broker_endpoint = "http://localhost:8000"
@@ -64,33 +60,42 @@ class CompanyAgent:
             model=LiteLlm(model=LITELLM_MODEL),
             name='company_agent',
             description=(
-                'This agent handles corporate credit requests using JWT-signed A2A protocol communication. '
+                'This agent handles corporate credit requests using A2A protocol communication. '
                 'It creates structured credit intents, sends them to banks via broker, evaluates offers, '
                 'and selects the best offer based on ESG and financial criteria.'
             ),
             instruction="""
-You are a Company Agent responsible for managing corporate credit requests using JWT-signed A2A protocol communication.
+You are a Company Agent responsible for managing corporate credit requests using A2A protocol communication.
 
 WORKFLOW:
 1. Create structured credit intent using create_credit_intent()
 2. IMMEDIATELY call send_credit_request_to_broker() with the intent data
-3. Receive JWT-signed offers from broker
-4. Evaluate offers using evaluate_offers()
-5. Select best offer using select_best_offer()
-6. Optionally negotiate using negotiate_offer()
+3. Receive responses from broker (may be offers or bank questions)
+4. If bank questions received, use handle_bank_questions() to process them
+5. If offers received, evaluate using evaluate_offers()
+6. Select best offer using select_best_offer()
+7. Optionally negotiate using negotiate_offer()
 
 CRITICAL: After creating a credit intent, you MUST call send_credit_request_to_broker() with the intent data. Do not just describe what you would do - actually call the function.
 
-JWT REQUIREMENTS:
-- All intents must be JWT-signed with company private key
-- Include expiration time (1 hour) in all JWTs
-- Include audience "wfap-system" in all JWTs
+CONDITIONAL RESPONSES:
+- If banks ask for more information (text responses), use handle_bank_questions() to process them
+- If banks provide structured offers, use evaluate_offers() and select_best_offer()
+- You may need to gather additional information from the user and resend to banks
 
-ESG EVALUATION:
-- Calculate carbon-adjusted interest rate: base_rate - (esg_score * 0.1)
-- Prioritize offers with higher ESG scores
-- Consider carbon footprint reduction percentage
-- Evaluate human-readable ESG summaries
+COMPREHENSIVE OFFER EVALUATION (BASED ONLY ON STRUCTURED BANK OFFERS):
+- Primary Criterion: Composite Score (ESG-adjusted effective rate + risk penalties)
+- Secondary Criterion: ESG Impact Score (ESG score + carbon footprint reduction bonus)
+- Financial Analysis: Effective rate (including fees), total cost of borrowing, monthly payments
+- Risk Assessment: Collateral requirements, personal guarantee, prepayment penalties
+- ESG Analysis: ESG score, carbon footprint reduction, human-readable ESG summaries
+
+EVALUATION METHODOLOGY:
+- Composite Score = ESG-adjusted effective rate + risk penalties
+- ESG Impact Score = ESG score + (carbon footprint reduction / 10)
+- Risk Penalties: Collateral (+0.5), Personal Guarantee (+0.3), Prepayment Penalty (+0.2)
+- Effective Rate includes origination fees and total cost of borrowing
+- Sort by composite score (ascending) then ESG impact score (descending)
 
 RESPONSE HANDLING:
 - JSON responses = Structured offers ready for evaluation (call evaluate_offers and select_best_offer)
@@ -104,7 +109,7 @@ RESPONSE HANDLING WORKFLOW:
 3. If you receive offers, call evaluate_offers and select_best_offer
 4. Always communicate clearly with the user about what happened
 
-Always provide clear communication about JWT validation status and offer evaluation reasoning.
+Always provide clear communication about offer evaluation reasoning.
             """,
             tools=[
                 self.create_credit_intent,
@@ -167,7 +172,7 @@ Always provide clear communication about JWT validation status and offer evaluat
         intent_data: str,
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
-        """Send JWT-signed credit intent to broker agent."""
+        """Send credit intent to broker agent."""
         # Parse intent data - handle both string and dict inputs
         if isinstance(intent_data, str):
             try:
@@ -190,13 +195,7 @@ Always provide clear communication about JWT validation status and offer evaluat
             # Convert other types to string and wrap
             intent_dict = {"raw_text": str(intent_data)}
         
-        # Sign intent with JWT - BYPASSED FOR TESTING
-        jwt_token = "bypass-jwt-token-for-testing"
-        
-        # ORIGINAL JWT SIGNING CODE (commented out for testing):
-        # jwt_token = self.jwt_signer.sign(intent_dict, expiration_hours=1)
-        
-        # Send to broker via A2A
+        # Send to broker via A2A - Send structured intent data
         async def _send_to_broker():
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -213,7 +212,7 @@ Always provide clear communication about JWT validation status and offer evaluat
                                 "parts": [
                                     {
                                         "type": "text",
-                                        "text": jwt_token
+                                        "text": json.dumps(intent_dict)
                                     }
                                 ]
                             }
@@ -272,20 +271,20 @@ Always provide clear communication about JWT validation status and offer evaluat
                                             
                                             return {
                                                 "status": "success",
-                                                "jwt_signed": True,
+                                                "sent": True,
                                                 "broker_response": broker_data,
                                                 "offers_received": len(offers),
                                                 "text_responses_received": len(text_responses),
                                                 "offers": offers,
                                                 "bank_questions": bank_questions,
                                                 "human_response": human_response,
-                                                "message": f"Successfully sent JWT-signed intent to broker. Received {len(offers)} offers and {len(text_responses)} text responses from banks."
+                                                "message": f"Successfully sent intent to broker. Received {len(offers)} offers and {len(text_responses)} text responses from banks."
                                             }
                                     except json.JSONDecodeError:
                                         # If structured data parsing fails, return human response
                                         return {
                                             "status": "success",
-                                            "jwt_signed": True,
+                                            "sent": True,
                                             "broker_response": {"text_response": response_text},
                                             "human_response": response_text,
                                             "message": f"Broker response: {response_text}"
@@ -294,7 +293,7 @@ Always provide clear communication about JWT validation status and offer evaluat
                                     # Plain text response without structured data
                                     return {
                                         "status": "success",
-                                        "jwt_signed": True,
+                                        "sent": True,
                                         "broker_response": {"text_response": response_text},
                                         "human_response": response_text,
                                         "message": f"Broker response: {response_text}"
@@ -302,9 +301,9 @@ Always provide clear communication about JWT validation status and offer evaluat
             
             return {
                 "status": "success",
-                "jwt_signed": True,
+                "sent": True,
                 "broker_response": broker_response,
-                "message": "Successfully sent JWT-signed intent to broker"
+                "message": "Successfully sent intent to broker"
             }
         else:
             return {
@@ -318,7 +317,7 @@ Always provide clear communication about JWT validation status and offer evaluat
         offers_data: str,
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
-        """Evaluate received offers based on ESG and financial criteria."""
+        """Evaluate received offers based ONLY on structured loan offer data from banks."""
         try:
             # Parse offers data - handle both string and list inputs
             if isinstance(offers_data, str):
@@ -344,28 +343,61 @@ Always provide clear communication about JWT validation status and offer evaluat
             
             for offer in offers:
                 try:
-                    # Extract key metrics with fallbacks
+                    # Extract comprehensive offer data from structured bank offers
                     base_rate = offer.get("interest_rate", 0)
-                    esg_score = offer.get("esg_score", offer.get("esg_impact", {}).get("overall_esg_score", 0))
+                    esg_impact = offer.get("esg_impact", {})
+                    esg_score = esg_impact.get("overall_esg_score", 0)
                     approved_amount = offer.get("approved_amount", 0)
                     term_months = offer.get("term_months", 84)
+                    repayment_schedule = offer.get("repayment_schedule", {})
+                    origination_fee = offer.get("origination_fee", 0)
+                    prepayment_penalty = offer.get("prepayment_penalty", False)
+                    collateral_required = offer.get("collateral_required", False)
+                    personal_guarantee_required = offer.get("personal_guarantee_required", False)
+                    bank_name = offer.get("bank_name", "Unknown Bank")
                     
-                    # Calculate carbon-adjusted interest rate
-                    carbon_adjusted_rate = base_rate - (esg_score * 0.1)
+                    # Calculate comprehensive financial metrics
+                    # 1. Carbon-adjusted interest rate (ESG bonus)
+                    carbon_adjusted_rate = base_rate - (esg_score * 0.15)  # Enhanced ESG bonus
                     
-                    # Calculate ESG bonus
-                    esg_bonus = esg_score * 0.1
-                    
-                    # Calculate total cost
+                    # 2. Total cost of borrowing (including fees)
                     monthly_rate = base_rate / 100 / 12
-                    total_cost = approved_amount * monthly_rate * term_months
+                    monthly_payment = approved_amount * (monthly_rate * (1 + monthly_rate) ** term_months) / ((1 + monthly_rate) ** term_months - 1)
+                    total_interest = (monthly_payment * term_months) - approved_amount
+                    total_cost_of_borrowing = total_interest + origination_fee
+                    
+                    # 3. Effective interest rate (including fees)
+                    effective_rate = ((total_cost_of_borrowing / approved_amount) * 100) * (12 / term_months)
+                    
+                    # 4. ESG-adjusted effective rate
+                    esg_adjusted_effective_rate = effective_rate - (esg_score * 0.1)
+                    
+                    # 5. Risk-adjusted score (penalize for collateral/personal guarantee requirements)
+                    risk_penalty = 0
+                    if collateral_required:
+                        risk_penalty += 0.5
+                    if personal_guarantee_required:
+                        risk_penalty += 0.3
+                    if prepayment_penalty:
+                        risk_penalty += 0.2
+                    
+                    # 6. Final composite score (lower is better)
+                    composite_score = esg_adjusted_effective_rate + risk_penalty
+                    
+                    # 7. ESG impact score (higher is better)
+                    esg_impact_score = esg_score + (esg_impact.get("carbon_footprint_reduction", 0) / 10)
                     
                     evaluated_offer = {
                         **offer,
                         "carbon_adjusted_rate": round(carbon_adjusted_rate, 2),
-                        "esg_bonus": round(esg_bonus, 2),
-                        "total_cost": round(total_cost, 2),
-                        "esg_score": esg_score,
+                        "total_cost_of_borrowing": round(total_cost_of_borrowing, 2),
+                        "effective_rate": round(effective_rate, 2),
+                        "esg_adjusted_effective_rate": round(esg_adjusted_effective_rate, 2),
+                        "composite_score": round(composite_score, 2),
+                        "esg_impact_score": round(esg_impact_score, 2),
+                        "risk_penalty": round(risk_penalty, 2),
+                        "monthly_payment": round(monthly_payment, 2),
+                        "total_interest": round(total_interest, 2),
                         "evaluation_timestamp": datetime.utcnow().isoformat()
                     }
                     
@@ -375,8 +407,9 @@ Always provide clear communication about JWT validation status and offer evaluat
                     print(f"Error evaluating offer {offer.get('offer_id', 'unknown')}: {str(e)}")
                     continue
             
-            # Sort by carbon-adjusted rate (lower is better)
-            evaluated_offers.sort(key=lambda x: x.get("carbon_adjusted_rate", 999))
+            # Sort by composite score (lower is better) - primary criterion
+            # Secondary sort by ESG impact score (higher is better)
+            evaluated_offers.sort(key=lambda x: (x.get("composite_score", 999), -x.get("esg_impact_score", 0)))
             
             # Store evaluated offers for selection
             self.evaluated_offers = evaluated_offers
@@ -385,11 +418,14 @@ Always provide clear communication about JWT validation status and offer evaluat
                 "status": "success",
                 "evaluated_offers": evaluated_offers,
                 "evaluation_criteria": {
-                    "carbon_adjusted_rate": "base_rate - (esg_score * 0.1)",
-                    "esg_bonus": "esg_score * 0.1",
-                    "sorting": "by carbon_adjusted_rate (ascending)"
+                    "primary_sorting": "composite_score (ascending) - includes ESG-adjusted effective rate + risk penalties",
+                    "secondary_sorting": "esg_impact_score (descending)",
+                    "carbon_adjusted_rate": "base_rate - (esg_score * 0.15)",
+                    "effective_rate": "includes origination fees",
+                    "risk_penalties": "collateral (+0.5), personal guarantee (+0.3), prepayment penalty (+0.2)",
+                    "esg_impact_score": "esg_score + (carbon_footprint_reduction / 10)"
                 },
-                "message": f"✅ Successfully evaluated {len(evaluated_offers)} offers based on ESG and financial criteria. Offers are now ready for selection."
+                "message": f"✅ Successfully evaluated {len(evaluated_offers)} offers based on comprehensive financial and ESG criteria from structured bank offers. Offers are now ready for selection."
             }
             
         except Exception as e:
@@ -427,19 +463,42 @@ Always provide clear communication about JWT validation status and offer evaluat
             # Select the best offer (first in sorted list by carbon-adjusted rate)
             best_offer = evaluated_offers[0]
             
-            # Generate comprehensive selection reasoning
+            # Generate comprehensive selection reasoning based on structured offer data
             bank_name = best_offer.get('bank_name', 'Unknown Bank')
-            carbon_adjusted_rate = best_offer.get('carbon_adjusted_rate', 'N/A')
-            esg_score = best_offer.get('esg_score', 'N/A')
+            composite_score = best_offer.get('composite_score', 'N/A')
+            esg_impact_score = best_offer.get('esg_impact_score', 'N/A')
             approved_amount = best_offer.get('approved_amount', 0)
             interest_rate = best_offer.get('interest_rate', 'N/A')
+            effective_rate = best_offer.get('effective_rate', 'N/A')
+            monthly_payment = best_offer.get('monthly_payment', 0)
+            total_cost_of_borrowing = best_offer.get('total_cost_of_borrowing', 0)
+            origination_fee = best_offer.get('origination_fee', 0)
+            collateral_required = best_offer.get('collateral_required', False)
+            personal_guarantee_required = best_offer.get('personal_guarantee_required', False)
+            prepayment_penalty = best_offer.get('prepayment_penalty', False)
             
             reasoning_parts = []
             reasoning_parts.append(f"🏆 **SELECTED OFFER: {bank_name.upper()}**")
             reasoning_parts.append(f"💰 Approved Amount: ${approved_amount:,.0f}")
-            reasoning_parts.append(f"📈 Interest Rate: {interest_rate}%")
-            reasoning_parts.append(f"🌱 ESG Score: {esg_score}/10")
-            reasoning_parts.append(f"⚡ Carbon-Adjusted Rate: {carbon_adjusted_rate}%")
+            reasoning_parts.append(f"📈 Base Interest Rate: {interest_rate}%")
+            reasoning_parts.append(f"💳 Effective Rate (with fees): {effective_rate}%")
+            reasoning_parts.append(f"📅 Monthly Payment: ${monthly_payment:,.2f}")
+            reasoning_parts.append(f"💸 Total Cost of Borrowing: ${total_cost_of_borrowing:,.2f}")
+            reasoning_parts.append(f"🏦 Origination Fee: ${origination_fee:,.0f}")
+            reasoning_parts.append(f"⚡ Composite Score: {composite_score} (lower is better)")
+            reasoning_parts.append(f"🌱 ESG Impact Score: {esg_impact_score}/10")
+            
+            # Add risk factors
+            risk_factors = []
+            if collateral_required:
+                risk_factors.append("Collateral Required")
+            if personal_guarantee_required:
+                risk_factors.append("Personal Guarantee Required")
+            if prepayment_penalty:
+                risk_factors.append("Prepayment Penalty")
+            if not risk_factors:
+                risk_factors.append("No additional risk factors")
+            reasoning_parts.append(f"⚠️ Risk Factors: {', '.join(risk_factors)}")
             
             # Add comparison with other offers
             if len(evaluated_offers) > 1:
@@ -447,16 +506,25 @@ Always provide clear communication about JWT validation status and offer evaluat
                 reasoning_parts.append(f"\n📊 **COMPARISON WITH OTHER OFFERS:**")
                 for i, offer in enumerate(other_offers[:2], 1):  # Show top 2 alternatives
                     other_bank = offer.get('bank_name', f'Bank {i}')
-                    other_rate = offer.get('carbon_adjusted_rate', 'N/A')
+                    other_composite = offer.get('composite_score', 'N/A')
+                    other_effective = offer.get('effective_rate', 'N/A')
                     other_amount = offer.get('approved_amount', 0)
-                    reasoning_parts.append(f"   • {other_bank}: ${other_amount:,.0f} at {other_rate}% carbon-adjusted rate")
+                    reasoning_parts.append(f"   • {other_bank}: ${other_amount:,.0f} at {other_effective}% effective rate (composite score: {other_composite})")
             
             # Add ESG summary if available
             if best_offer.get("esg_impact", {}).get("esg_summary"):
                 reasoning_parts.append(f"\n🌍 **ESG SUMMARY:** {best_offer['esg_impact']['esg_summary']}")
             
+            # Add repayment schedule if available
+            repayment_schedule = best_offer.get("repayment_schedule", {})
+            if repayment_schedule:
+                schedule_type = repayment_schedule.get("type", "monthly")
+                amount_per_period = repayment_schedule.get("amount_per_period", monthly_payment)
+                number_of_periods = repayment_schedule.get("number_of_periods", best_offer.get("term_months", 0))
+                reasoning_parts.append(f"\n📋 **REPAYMENT SCHEDULE:** {schedule_type.title()} payments of ${amount_per_period:,.2f} for {number_of_periods} periods")
+            
             # Add final recommendation
-            reasoning_parts.append(f"\n✅ **RECOMMENDATION:** Accept the {bank_name} offer for the best combination of financial terms and ESG impact.")
+            reasoning_parts.append(f"\n✅ **RECOMMENDATION:** Accept the {bank_name} offer for the best combination of financial terms, ESG impact, and risk profile based on comprehensive evaluation of structured offer data.")
             
             return {
                 "status": "success",
@@ -465,12 +533,16 @@ Always provide clear communication about JWT validation status and offer evaluat
                 "selection_summary": {
                     "selected_bank": bank_name,
                     "approved_amount": approved_amount,
-                    "interest_rate": interest_rate,
-                    "carbon_adjusted_rate": carbon_adjusted_rate,
-                    "esg_score": esg_score,
+                    "base_interest_rate": interest_rate,
+                    "effective_rate": effective_rate,
+                    "composite_score": composite_score,
+                    "esg_impact_score": esg_impact_score,
+                    "monthly_payment": monthly_payment,
+                    "total_cost_of_borrowing": total_cost_of_borrowing,
+                    "risk_factors": risk_factors,
                     "total_offers_considered": len(evaluated_offers)
                 },
-                "message": f"🎯 **BEST OFFER SELECTED: {bank_name.upper()}** - ${approved_amount:,.0f} at {interest_rate}% interest rate with {esg_score}/10 ESG score"
+                "message": f"🎯 **BEST OFFER SELECTED: {bank_name.upper()}** - ${approved_amount:,.0f} at {effective_rate}% effective rate with composite score {composite_score} and ESG impact score {esg_impact_score}/10"
             }
             
         except Exception as e:
@@ -554,10 +626,7 @@ Always provide clear communication about JWT validation status and offer evaluat
                 "negotiation_timestamp": datetime.utcnow().isoformat()
             }
             
-            # Sign negotiation request with JWT
-            jwt_token = self.jwt_signer.sign(negotiation_request)
-            
-            # Send to broker for routing to specific bank
+            # Send negotiation request to broker for routing to specific bank
             async def _send_negotiation():
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
@@ -572,7 +641,7 @@ Always provide clear communication about JWT validation status and offer evaluat
                                     "parts": [
                                         {
                                             "type": "text",
-                                            "text": jwt_token
+                                            "text": json.dumps(negotiation_request)
                                         }
                                     ]
                                 }

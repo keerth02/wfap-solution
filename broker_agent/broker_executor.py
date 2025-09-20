@@ -227,7 +227,7 @@ class BrokerAgentExecutor(AgentExecutor):
                 "task_id": task.id if task else "unknown"
             })
 
-            # Route to banks (no JWT validation - banks will handle it)
+            # Route to banks
             bank_responses = await self._route_to_banks(user_input)
             
             # Aggregate responses

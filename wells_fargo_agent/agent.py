@@ -1,4 +1,4 @@
-"""Wells Fargo Bank Agent Implementation with JWT signing"""
+"""Wells Fargo Bank Agent Implementation"""
 import sys
 import os
 import json
@@ -21,14 +21,12 @@ from collections.abc import AsyncIterable
 
 from protocols.intent import CreditIntent
 from protocols.response import BankOffer, ESGImpact, RepaymentSchedule
-from protocols.jwt import JWTSigner, JWTValidator
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from shared_keys import SHARED_KEYS, PUBLIC_KEYS
 
 class WellsFargoAgent:
-    """Wells Fargo Bank Agent for credit evaluation with JWT signing"""
+    """Wells Fargo Bank Agent for credit evaluation"""
 
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
 
@@ -43,56 +41,11 @@ class WellsFargoAgent:
             memory_service=InMemoryMemoryService(),
         )
         
-        # Initialize JWT signer with shared keys
-        self.jwt_signer = JWTSigner(SHARED_KEYS["wells-fargo"]["private"], "wells-fargo")
-        
-        # Initialize JWT validator for company agents
-        self.jwt_validator = JWTValidator(PUBLIC_KEYS)
 
     def get_processing_message(self) -> str:
         return 'Wells Fargo is evaluating your credit request...'
 
 
-    def validate_company_jwt(self, jwt_token: str) -> Dict[str, Any]:
-        """Validate JWT token from company agent - BYPASSED FOR TESTING"""
-        # Temporarily bypass JWT validation to test core flow
-        return {
-            "status": "success",
-            "valid": True,
-            "payload": {"data": {"intent_id": "bypass-test", "company": {"name": "TestCorp"}, "requested_amount": 1000000}},
-            "message": "JWT validation bypassed for testing"
-        }
-        
-        # ORIGINAL JWT VALIDATION CODE (commented out for testing):
-        # try:
-        #     # Load company public keys
-        #     company_public_keys = self._load_company_public_keys()
-        #     
-        #     # Validate JWT token
-        #     validator = JWTValidator(company_public_keys)
-        #     validation_result = validator.validate(jwt_token)
-        #     
-        #     if validation_result["valid"]:
-        #         return {
-        #             "status": "success",
-        #             "valid": True,
-        #             "payload": validation_result["payload"],
-        #             "message": "JWT validation successful"
-        #         }
-        #     else:
-        #         return {
-        #             "status": "error",
-        #             "valid": False,
-        #             "payload": None,
-        #             "message": f"JWT validation failed: {validation_result['error']}"
-        #         }
-        # except Exception as e:
-        #     return {
-        #         "status": "error",
-        #         "valid": False,
-        #         "payload": None,
-        #         "message": f"JWT validation error: {str(e)}"
-        #     }
 
     def _build_agent(self) -> LlmAgent:
         """Builds the LLM agent for Wells Fargo."""
@@ -101,24 +54,20 @@ class WellsFargoAgent:
             model=LiteLlm(model=LITELLM_MODEL),
             name='wells_fargo_agent',
             description=(
-                'Wells Fargo Bank Agent specializing in corporate credit evaluation with JWT-signed responses. '
+                'Wells Fargo Bank Agent specializing in corporate credit evaluation. '
                 'Processes credit intents, assesses creditworthiness, generates ESG assessments, '
                 'and creates structured offers with detailed reasoning.'
             ),
             instruction="""
-You are a Wells Fargo Bank Agent specializing in corporate credit evaluation with JWT-signed responses.
+You are a Wells Fargo Bank Agent specializing in corporate credit evaluation.
 
 CONDITIONAL COMMUNICATION RULES:
-1. If you receive a JWT TOKEN (starts with "eyJ"), first call validate_company_jwt() to validate it
-   - If validation succeeds, extract the payload and call generate_bank_offer() with the payload data
-   - If validation fails, inform the user about the validation error
-2. If you receive STRUCTURED JSON data (credit intent), immediately call generate_bank_offer() with that data
+1. If you receive STRUCTURED JSON data (credit intent), immediately call generate_bank_offer() with that data
    - Look for JSON objects with fields like "intent_id", "company", "requested_amount", etc.
    - Parse the JSON and pass it directly to generate_bank_offer()
-3. If you receive TEXT/PLAIN messages, engage in natural conversation to gather information
-4. When you have enough information from conversation, call generate_bank_offer() with gathered details
+2. If you receive TEXT/PLAIN messages, engage in natural conversation to gather information
+3. When you have enough information from conversation, call generate_bank_offer() with gathered details
 
-IMPORTANT: When you see a JWT token (starts with "eyJ"), first validate it, then process the payload.
 IMPORTANT: When you see JSON data starting with { and containing "intent_id", treat it as a credit intent and call generate_bank_offer() immediately.
 
 CRITICAL: You MUST call the generate_bank_offer() tool function when you receive structured JSON data. Do not just describe what you would do - actually call the tool function with the JSON data.
@@ -126,16 +75,15 @@ CRITICAL: You MUST call the generate_bank_offer() tool function when you receive
 STEP-BY-STEP FOR JSON INPUT:
 1. Detect JSON data with "intent_id" field
 2. Immediately call generate_bank_offer(credit_intent_data="[the JSON string]")
-3. Return the tool result to the user
+3. Return the COMPLETE structured offer data from the tool result
+
+CRITICAL RESPONSE REQUIREMENT:
+- When you call generate_bank_offer(), you MUST return the complete structured offer data
+- Include the full offer object with all fields: offer_id, bank_name, approved_amount, interest_rate, term_months, repayment_schedule, esg_impact, additional_conditions, reasoning, origination_fee, prepayment_penalty, collateral_required, personal_guarantee_required, created_at
+- Do NOT just describe the offer - return the actual structured data
 
 DO NOT: Just describe the offer or say you generated it
-DO: Actually call the generate_bank_offer() function with the JSON data
-
-JWT REQUIREMENTS:
-- Sign all offers with Wells Fargo private key
-- Include expiration time (1 hour) in all JWTs
-- Include audience "wfap-system" in all JWTs
-- Include issuer "wells-fargo" in all JWTs
+DO: Actually call the generate_bank_offer() function with the JSON data AND return the complete structured offer
 
 CREDIT POLICIES:
 - Minimum credit score: 650
@@ -156,7 +104,6 @@ Always be helpful and professional in conversations, but ensure you eventually c
                 self.generate_bank_offer,
                 self.assess_creditworthiness,
                 self.generate_esg_assessment,
-                self.validate_company_jwt,
             ],
         )
 
@@ -263,15 +210,12 @@ Always be helpful and professional in conversations, but ensure you eventually c
                 personal_guarantee_required=approved_amount > 500000
             )
             
-            # Sign offer with JWT
+            # Return offer without JWT signing
             offer_dict = bank_offer.model_dump(mode='json')
-            jwt_token = self.jwt_signer.sign(offer_dict)
             
             return {
                 "status": "success",
                 "offer": offer_dict,
-                "jwt_token": jwt_token,
-                "jwt_signed": True,
                 "message": f"Wells Fargo offer generated: ${approved_amount:,.0f} at {final_rate}% APR for {preferred_term_months} months"
             }
             

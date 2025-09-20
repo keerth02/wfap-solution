@@ -34,7 +34,7 @@ class CompanyRequestHandler(DefaultRequestHandler):
 def main(host: str, port: int):
     """Start the WFAP Company Agent server.
 
-    This function initializes the Company Agent server with JWT signing and A2A communication capabilities.
+    This function initializes the Company Agent server with A2A communication capabilities.
     It creates an agent card with the company's capabilities for credit request management,
     offer evaluation, and negotiation.
 
@@ -47,8 +47,8 @@ def main(host: str, port: int):
     credit_intent_skill = AgentSkill(
         id='create_credit_intent',
         name='Create Credit Intent',
-        description='Create structured credit intent with company information and JWT signing',
-        tags=['credit', 'intent', 'jwt'],
+        description='Create structured credit intent with company information',
+        tags=['credit', 'intent'],
         examples=['Create credit intent for $1M working capital', 'Generate intent for expansion funding'],
     )
     
@@ -123,7 +123,7 @@ def main(host: str, port: int):
     
     print(f"🏢 Starting WFAP Company Agent on http://{host}:{port}")
     print(f"📋 Agent Card available at: http://{host}:{port}/.well-known/agent-card.json")
-    print(f"🔐 JWT signing enabled for company-agent-1")
+    print(f"🔐 Company agent ready")
     print(f"🌐 Broker endpoint: http://localhost:8000")
     print(f"💼 Ready to handle credit requests with ESG evaluation")
     

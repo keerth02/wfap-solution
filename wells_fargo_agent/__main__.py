@@ -34,7 +34,7 @@ class WellsFargoRequestHandler(DefaultRequestHandler):
 def main(host: str, port: int):
     """Start the WFAP Wells Fargo Agent server.
 
-    This function initializes the Wells Fargo Bank Agent server with JWT signing capabilities.
+    This function initializes the Wells Fargo Bank Agent server.
     It creates an agent card with Wells Fargo's capabilities for credit evaluation,
     ESG assessment, and offer generation.
 
@@ -104,7 +104,7 @@ def main(host: str, port: int):
     
     print(f"🏦 Starting WFAP Wells Fargo Agent on http://{host}:{port}")
     print(f"📋 Agent Card available at: http://{host}:{port}/.well-known/agent-card.json")
-    print(f"🔐 JWT signing enabled for wells-fargo")
+    print(f"🔐 Wells Fargo agent ready")
     print(f"💼 Conservative credit policies: Min score 650, Preferred industries: Tech/Healthcare/Manufacturing")
     print(f"🌱 ESG bonus: +0.25% rate reduction for ESG score > 8.0")
     

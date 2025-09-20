@@ -1,7 +1,7 @@
 [project]
 name = "broker-agent"
 version = "0.1.0"
-description = "WFAP Broker Agent - JWT validation and routing"
+description = "WFAP Broker Agent - Message routing"
 requires-python = ">=3.12"
 dependencies = [
     "a2a-sdk>=0.3.0",
@@ -10,8 +10,6 @@ dependencies = [
     "httpx>=0.28.1",
     "python-dotenv>=1.1.0",
     "uvicorn>=0.34.0",
-    "PyJWT>=2.8.0",
-    "cryptography>=41.0.0",
 ]
 
 [build-system]

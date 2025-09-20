@@ -34,7 +34,7 @@ class BOARequestHandler(DefaultRequestHandler):
 def main(host: str, port: int):
     """Start the WFAP Bank of America Agent server.
 
-    This function initializes the Bank of America Agent server with JWT signing capabilities.
+    This function initializes the Bank of America Agent server.
     It creates an agent card with Bank of America's capabilities for credit evaluation,
     ESG assessment, and competitive offer generation.
 
@@ -104,7 +104,7 @@ def main(host: str, port: int):
     
     print(f"🏦 Starting WFAP Bank of America Agent on http://{host}:{port}")
     print(f"📋 Agent Card available at: http://{host}:{port}/.well-known/agent-card.json")
-    print(f"🔐 JWT signing enabled for bank-of-america")
+    print(f"🔐 Bank of America agent ready")
     print(f"💼 Innovation-focused credit policies: Min score 600, Preferred industries: Tech/Fintech/Innovation")
     print(f"🌱 ESG bonus: +0.5% rate reduction for ESG score > 7.5")
     print(f"🚀 Innovation bonus: +0.25% rate reduction for tech companies")
