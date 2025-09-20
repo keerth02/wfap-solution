@@ -50,15 +50,16 @@ class CompanyAgent:
         # Broker endpoint
         self.broker_endpoint = "http://localhost:8000"
         
-        # Store received offers
+        # Store received offers and evaluated offers
         self.received_offers = []
+        self.evaluated_offers = []
 
     def get_processing_message(self) -> str:
         return 'Processing your credit request and communicating with banks...'
 
     def _build_agent(self) -> LlmAgent:
         """Builds the LLM agent for the company agent."""
-        LITELLM_MODEL = os.getenv('LITELLM_MODEL', 'gemini/gemini-1.5-flash')
+        LITELLM_MODEL = os.getenv('LITELLM_MODEL', 'gemini/gemini-2.0-flash')
         return LlmAgent(
             model=LiteLlm(model=LITELLM_MODEL),
             name='company_agent',
@@ -319,30 +320,43 @@ Always provide clear communication about JWT validation status and offer evaluat
     ) -> Dict[str, Any]:
         """Evaluate received offers based on ESG and financial criteria."""
         try:
-            # Parse offers data
+            # Parse offers data - handle both string and list inputs
             if isinstance(offers_data, str):
-                offers = json.loads(offers_data)
+                try:
+                    offers = json.loads(offers_data)
+                except json.JSONDecodeError:
+                    # If it's not JSON, try to extract offers from the text
+                    offers = self.received_offers
             else:
                 offers = offers_data
             
-            if not isinstance(offers, list):
+            # If still no offers, use stored offers
+            if not offers or not isinstance(offers, list):
                 offers = self.received_offers
+            
+            if not offers:
+                return {
+                    "status": "error",
+                    "error": "No offers available for evaluation"
+                }
             
             evaluated_offers = []
             
             for offer in offers:
                 try:
-                    # Calculate carbon-adjusted interest rate
+                    # Extract key metrics with fallbacks
                     base_rate = offer.get("interest_rate", 0)
-                    esg_score = offer.get("esg_impact", {}).get("overall_esg_score", 0)
+                    esg_score = offer.get("esg_score", offer.get("esg_impact", {}).get("overall_esg_score", 0))
+                    approved_amount = offer.get("approved_amount", 0)
+                    term_months = offer.get("term_months", 84)
+                    
+                    # Calculate carbon-adjusted interest rate
                     carbon_adjusted_rate = base_rate - (esg_score * 0.1)
                     
                     # Calculate ESG bonus
                     esg_bonus = esg_score * 0.1
                     
                     # Calculate total cost
-                    approved_amount = offer.get("approved_amount", 0)
-                    term_months = offer.get("term_months", 12)
                     monthly_rate = base_rate / 100 / 12
                     total_cost = approved_amount * monthly_rate * term_months
                     
@@ -364,6 +378,9 @@ Always provide clear communication about JWT validation status and offer evaluat
             # Sort by carbon-adjusted rate (lower is better)
             evaluated_offers.sort(key=lambda x: x.get("carbon_adjusted_rate", 999))
             
+            # Store evaluated offers for selection
+            self.evaluated_offers = evaluated_offers
+            
             return {
                 "status": "success",
                 "evaluated_offers": evaluated_offers,
@@ -372,7 +389,7 @@ Always provide clear communication about JWT validation status and offer evaluat
                     "esg_bonus": "esg_score * 0.1",
                     "sorting": "by carbon_adjusted_rate (ascending)"
                 },
-                "message": f"Evaluated {len(evaluated_offers)} offers based on ESG and financial criteria"
+                "message": f"✅ Successfully evaluated {len(evaluated_offers)} offers based on ESG and financial criteria. Offers are now ready for selection."
             }
             
         except Exception as e:
@@ -383,45 +400,77 @@ Always provide clear communication about JWT validation status and offer evaluat
 
     def select_best_offer(
         self,
-        evaluated_offers_data: str,
+        evaluated_offers_data: str = "",
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
         """Select the best offer based on evaluation criteria."""
         try:
-            # Parse evaluated offers data
-            if isinstance(evaluated_offers_data, str):
-                evaluated_offers = json.loads(evaluated_offers_data)
+            # Use stored evaluated offers if available, otherwise parse input
+            if hasattr(self, 'evaluated_offers') and self.evaluated_offers:
+                evaluated_offers = self.evaluated_offers
             else:
-                evaluated_offers = evaluated_offers_data
+                # Parse evaluated offers data
+                if isinstance(evaluated_offers_data, str) and evaluated_offers_data.strip():
+                    try:
+                        evaluated_offers = json.loads(evaluated_offers_data)
+                    except json.JSONDecodeError:
+                        evaluated_offers = self.received_offers
+                else:
+                    evaluated_offers = evaluated_offers_data or self.received_offers
             
-            if not isinstance(evaluated_offers, list):
-                evaluated_offers = self.received_offers
-            
-            if not evaluated_offers:
+            if not evaluated_offers or not isinstance(evaluated_offers, list):
                 return {
                     "status": "error",
-                    "error": "No offers available for selection"
+                    "error": "No offers available for selection. Please evaluate offers first."
                 }
             
             # Select the best offer (first in sorted list by carbon-adjusted rate)
             best_offer = evaluated_offers[0]
             
-            # Generate selection reasoning
-            reasoning_parts = []
-            reasoning_parts.append(f"Selected {best_offer.get('bank_name', 'Unknown Bank')} offer")
-            reasoning_parts.append(f"Carbon-adjusted rate: {best_offer.get('carbon_adjusted_rate', 'N/A')}%")
-            reasoning_parts.append(f"ESG score: {best_offer.get('esg_score', 'N/A')}/10")
-            reasoning_parts.append(f"Approved amount: ${best_offer.get('approved_amount', 0):,.2f}")
+            # Generate comprehensive selection reasoning
+            bank_name = best_offer.get('bank_name', 'Unknown Bank')
+            carbon_adjusted_rate = best_offer.get('carbon_adjusted_rate', 'N/A')
+            esg_score = best_offer.get('esg_score', 'N/A')
+            approved_amount = best_offer.get('approved_amount', 0)
+            interest_rate = best_offer.get('interest_rate', 'N/A')
             
+            reasoning_parts = []
+            reasoning_parts.append(f"🏆 **SELECTED OFFER: {bank_name.upper()}**")
+            reasoning_parts.append(f"💰 Approved Amount: ${approved_amount:,.0f}")
+            reasoning_parts.append(f"📈 Interest Rate: {interest_rate}%")
+            reasoning_parts.append(f"🌱 ESG Score: {esg_score}/10")
+            reasoning_parts.append(f"⚡ Carbon-Adjusted Rate: {carbon_adjusted_rate}%")
+            
+            # Add comparison with other offers
+            if len(evaluated_offers) > 1:
+                other_offers = evaluated_offers[1:]
+                reasoning_parts.append(f"\n📊 **COMPARISON WITH OTHER OFFERS:**")
+                for i, offer in enumerate(other_offers[:2], 1):  # Show top 2 alternatives
+                    other_bank = offer.get('bank_name', f'Bank {i}')
+                    other_rate = offer.get('carbon_adjusted_rate', 'N/A')
+                    other_amount = offer.get('approved_amount', 0)
+                    reasoning_parts.append(f"   • {other_bank}: ${other_amount:,.0f} at {other_rate}% carbon-adjusted rate")
+            
+            # Add ESG summary if available
             if best_offer.get("esg_impact", {}).get("esg_summary"):
-                reasoning_parts.append(f"ESG summary: {best_offer['esg_impact']['esg_summary']}")
+                reasoning_parts.append(f"\n🌍 **ESG SUMMARY:** {best_offer['esg_impact']['esg_summary']}")
+            
+            # Add final recommendation
+            reasoning_parts.append(f"\n✅ **RECOMMENDATION:** Accept the {bank_name} offer for the best combination of financial terms and ESG impact.")
             
             return {
                 "status": "success",
-                "selected_offer": best_offer,
-                "selection_reasoning": " | ".join(reasoning_parts),
-                "alternatives_considered": len(evaluated_offers) - 1,
-                "message": f"Selected best offer from {best_offer.get('bank_name', 'Unknown Bank')} based on ESG and financial criteria"
+                "best_offer": best_offer,
+                "reasoning": reasoning_parts,
+                "selection_summary": {
+                    "selected_bank": bank_name,
+                    "approved_amount": approved_amount,
+                    "interest_rate": interest_rate,
+                    "carbon_adjusted_rate": carbon_adjusted_rate,
+                    "esg_score": esg_score,
+                    "total_offers_considered": len(evaluated_offers)
+                },
+                "message": f"🎯 **BEST OFFER SELECTED: {bank_name.upper()}** - ${approved_amount:,.0f} at {interest_rate}% interest rate with {esg_score}/10 ESG score"
             }
             
         except Exception as e:

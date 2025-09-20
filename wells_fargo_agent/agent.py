@@ -96,7 +96,7 @@ class WellsFargoAgent:
 
     def _build_agent(self) -> LlmAgent:
         """Builds the LLM agent for Wells Fargo."""
-        LITELLM_MODEL = os.getenv('LITELLM_MODEL', 'gemini/gemini-1.5-flash')
+        LITELLM_MODEL = os.getenv('LITELLM_MODEL', 'gemini/gemini-2.0-flash')
         return LlmAgent(
             model=LiteLlm(model=LITELLM_MODEL),
             name='wells_fargo_agent',
