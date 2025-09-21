@@ -30,7 +30,8 @@ class BrokerAgentExecutor(AgentExecutor):
         # Bank endpoints
         self.bank_endpoints = {
             "wells-fargo": "http://localhost:8001",
-            "bank-of-america": "http://localhost:8002"
+            "bank-of-america": "http://localhost:8002",
+            "chase-bank": "http://localhost:8003"
         }
         
         # Simple audit log for routing events
