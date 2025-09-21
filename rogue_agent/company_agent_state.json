@@ -1,5 +1,35 @@
 {
-  "received_offers": [],
+  "received_offers": [
+    {
+      "offer_id": "OFFER_2a9f0df7eec44addaf515448232ace38",
+      "intent_id": "INTENT_4163458610e646d3bd569224ad3bd9b1",
+      "bank_name": "Bank of America",
+      "bank_id": "BOA001",
+      "approved_amount": 2000000.0,
+      "interest_rate": 4.0,
+      "term_months": 120,
+      "repayment_schedule": {
+        "type": "monthly",
+        "amount_per_period": 20264.35,
+        "number_of_periods": 120
+      },
+      "esg_impact": {
+        "overall_esg_score": 8.5,
+        "esg_summary": "TechCorp Inc demonstrates excellent ESG alignment with strong innovation focus and sustainable business practices in the technology sector. The company shows exceptional commitment to environmental responsibility and social impact.",
+        "carbon_footprint_reduction": 25.5
+      },
+      "additional_conditions": "Standard Bank of America terms apply. Innovation-focused companies may qualify for additional benefits.",
+      "reasoning": "Approved with innovation focus based on credit score 780, annual revenue $15,000,000, and ESG score 8.5/10. Bank of America's competitive approach supports growth and innovation.",
+      "origination_fee": 3000.0,
+      "prepayment_penalty": false,
+      "collateral_required": true,
+      "personal_guarantee_required": true,
+      "created_at": "2025-09-21T16:01:53.637429",
+      "counter_offer": true,
+      "negotiation_id": "NEGOTIATION_8923475982374",
+      "negotiation_reasoning": "Increased term to 120 months, adjusting interest rate to 4.0% to reflect the longer duration."
+    }
+  ],
   "evaluated_offers": [
     {
       "offer_id": "OFFER_2a9f0df7eec44addaf515448232ace38",
@@ -110,5 +140,5 @@
       "evaluation_timestamp": "2025-09-21T16:02:10.351708"
     }
   ],
-  "last_updated": "2025-09-21T17:11:15.746415"
+  "last_updated": "2025-09-21T16:05:25.502024"
 }

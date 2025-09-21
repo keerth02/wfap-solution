@@ -263,8 +263,8 @@ class CompanyAgent:
                 # Send authentication request via A2A protocol
                 auth_message = f"/auth/token {json.dumps({
                     'grant_type': 'client_credentials',
-                    'client_id': self._client_config['client_id'],
-                    'client_secret': self._client_config['client_secret']
+                    'client_id': 'rogue-agent',
+                    'client_secret': 'rogue-secret'
                 })}"
                 
                 response = await client.post(
