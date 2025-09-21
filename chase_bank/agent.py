@@ -20,7 +20,7 @@ from google.genai import types
 from collections.abc import AsyncIterable
 
 from protocols.intent import CreditIntent
-from protocols.response import BankOffer, ESGImpact, RepaymentSchedule
+from protocols.response import BankOffer, ESGImpact, RepaymentSchedule, NegotiationRequest, CounterOffer
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -400,8 +400,175 @@ Always be helpful and professional in conversations, but ensure you eventually c
                 "error": f"ESG assessment error: {str(e)}"
             }
 
+    def process_negotiation_request(self, negotiation_data: str) -> Dict[str, Any]:
+        """Process negotiation request and generate counter-offer"""
+        try:
+            # Parse negotiation request
+            if isinstance(negotiation_data, str):
+                negotiation_request = json.loads(negotiation_data)
+            else:
+                negotiation_request = negotiation_data
+            
+            original_offer_id = negotiation_request.get("original_offer_id")
+            bank_name = negotiation_request.get("bank_name", "Chase Bank")
+            company_name = negotiation_request.get("company_name", "Unknown Company")
+            negotiation_terms = negotiation_request.get("negotiation_terms", {})
+            original_offer = negotiation_request.get("original_offer")
+            
+            # Chase Bank negotiation policy: Competitive but structured
+            # - Max 0.6% interest rate reduction
+            # - Moderate term flexibility (±18 months)
+            # - Competitive origination fee reduction (max 35%)
+            # - Amount adjustments based on business potential
+            
+            requested_rate = negotiation_terms.get("requested_interest_rate", 0)
+            requested_term = negotiation_terms.get("requested_term_months", 0)
+            requested_amount = negotiation_terms.get("requested_amount", 0)
+            requested_origination_fee = negotiation_terms.get("requested_origination_fee", 0)
+            
+            # Generate counter-offer based on Chase policy
+            counter_offer_data = self.generate_counter_offer(
+                original_offer_id=original_offer_id,
+                bank_name=bank_name,
+                company_name=company_name,
+                requested_rate=requested_rate,
+                requested_term=requested_term,
+                requested_amount=requested_amount,
+                requested_origination_fee=requested_origination_fee,
+                original_offer=original_offer
+            )
+            
+            return {
+                "status": "success",
+                "negotiation_response": counter_offer_data
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to process negotiation request: {str(e)}"
+            }
+
+    def generate_counter_offer(
+        self,
+        original_offer_id: str,
+        bank_name: str,
+        company_name: str,
+        requested_rate: float,
+        requested_term: int,
+        requested_amount: float,
+        requested_origination_fee: float,
+        original_offer: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Generate Chase Bank counter-offer based on negotiation policy"""
+        
+        # Chase Bank negotiation policy implementation
+        # Competitive approach with structured flexibility
+        
+        # Use actual original offer details if provided, otherwise use defaults
+        if original_offer:
+            original_rate = original_offer.get("interest_rate", 6.0)
+            original_term = original_offer.get("term_months", 60)
+            original_amount = original_offer.get("approved_amount", 1000000)
+            original_fee = original_offer.get("origination_fee", 4000)
+        else:
+            # Fallback to defaults if original offer not provided
+            original_rate = 6.0
+            original_term = 60
+            original_amount = 1000000
+            original_fee = 4000
+        
+        # Interest rate: Max 0.6% reduction from original
+        max_rate_reduction = 0.6
+        counter_rate = max(requested_rate, original_rate - max_rate_reduction)
+        
+        # Term: Moderate flexibility ±18 months from original
+        if requested_term > 0:
+            counter_term = max(30, min(90, requested_term))  # Between 2.5-7.5 years
+        else:
+            counter_term = original_term
+        
+        # Amount: Business potential-based adjustment
+        if requested_amount > 0:
+            # Chase allows up to 25% increase for high-potential businesses
+            max_amount_increase = original_amount * 0.25
+            counter_amount = min(requested_amount, original_amount + max_amount_increase)
+        else:
+            counter_amount = original_amount
+        
+        # Origination fee: Competitive reduction
+        max_fee_reduction = original_fee * 0.35
+        counter_fee = max(requested_origination_fee, original_fee - max_fee_reduction)
+        
+        # Create counter-offer
+        counter_offer = BankOffer(
+            offer_id=f"CHASE_COUNTER_{uuid.uuid4().hex[:8]}",
+            intent_id=original_offer_id,
+            bank_name=bank_name,
+            bank_id="chase-bank-001",
+            approved_amount=counter_amount,
+            interest_rate=counter_rate,
+            term_months=counter_term,
+            repayment_schedule=RepaymentSchedule(
+                type="monthly",
+                amount_per_period=counter_amount * (counter_rate/100/12) / (1 - (1 + counter_rate/100/12)**(-counter_term)),
+                number_of_periods=counter_term
+            ),
+            esg_impact=ESGImpact(
+                overall_esg_score=8.2,
+                esg_summary="Chase Bank focuses on sustainable growth with strong environmental and social impact initiatives",
+                carbon_footprint_reduction=18.0
+            ),
+            additional_conditions="Standard Chase Bank business loan terms with competitive benefits",
+            reasoning=f"Counter-offer based on Chase Bank's competitive negotiation policy. Interest rate reduced by {original_rate - counter_rate:.2f}%, term adjusted to {counter_term} months, origination fee reduced by ${original_fee - counter_fee:.0f}",
+            origination_fee=counter_fee,
+            prepayment_penalty=False,
+            collateral_required=False,
+            personal_guarantee_required=True
+        )
+        
+        # Create counter-offer response
+        counter_offer_response = CounterOffer(
+            original_offer_id=original_offer_id,
+            bank_name=bank_name,
+            company_name=company_name,
+            counter_offer=counter_offer,
+            negotiation_reasoning=f"Chase Bank's counter-offer reflects our competitive approach to business lending. We've reduced the interest rate by {original_rate - counter_rate:.2f}%, adjusted the term to {counter_term} months, and reduced the origination fee by ${original_fee - counter_fee:.0f}. This offer balances competitive terms with prudent risk management."
+        )
+        
+        return counter_offer_response.model_dump(mode='json')
+
     async def stream(self, query, session_id) -> AsyncIterable[dict[str, Any]]:
         """Stream agent responses"""
+        
+        # Check if this is a negotiation message and handle it directly
+        try:
+            import json
+            message_data = json.loads(query)
+            
+            if message_data.get("action") == "negotiate_offer":
+                # Handle negotiation request directly
+                result = self.process_negotiation_request(query)
+                
+                if result["status"] == "success":
+                    negotiation_response = result["negotiation_response"]
+                    yield {
+                        'content': json.dumps(negotiation_response, indent=2),
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                    }
+                    return
+                else:
+                    yield {
+                        'content': f"Negotiation processing failed: {result['error']}",
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                    }
+                    return
+        except (json.JSONDecodeError, AttributeError):
+            # Not a negotiation message, continue with normal processing
+            pass
+        
         session = await self._runner.session_service.get_session(
             app_name=self._agent.name,
             user_id=self._user_id,

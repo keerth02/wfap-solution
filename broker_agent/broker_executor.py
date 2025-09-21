@@ -189,6 +189,118 @@ class BrokerAgentExecutor(AgentExecutor):
             "failed_responses": len(errors)
         }
 
+    async def _route_message(self, user_input: str) -> List[Dict[str, Any]]:
+        """Route message based on content - negotiation or regular credit intent"""
+        try:
+            # Try to parse as JSON to check if it's a negotiation message
+            message_data = json.loads(user_input)
+            
+            # Check if this is a negotiation message
+            if message_data.get("action") == "negotiate_offer":
+                bank_name = message_data.get("bank_name", "").lower()
+                print(f"🔄 NEGOTIATION DETECTED - Routing to {bank_name}")
+                return await self._route_negotiation_to_bank(user_input, bank_name)
+            else:
+                # Regular credit intent - route to all banks
+                print(f"📤 REGULAR MESSAGE - Routing to all banks")
+                return await self._route_to_banks(user_input)
+                
+        except (json.JSONDecodeError, AttributeError) as e:
+            # Not JSON or not a structured message - route to all banks
+            print(f"❌ JSON parse failed: {str(e)}")
+            print(f"📤 FALLBACK - Routing to all banks")
+            return await self._route_to_banks(user_input)
+
+    async def _route_negotiation_to_bank(self, negotiation_message: str, bank_name: str) -> List[Dict[str, Any]]:
+        """Route negotiation message to specific bank only"""
+        print(f"🔄 BROKER ROUTING NEGOTIATION TO {bank_name.upper()}")
+        
+        # Map bank names to endpoints
+        bank_endpoint_map = {
+            "wells fargo": "wells-fargo",
+            "wells-fargo": "wells-fargo", 
+            "bank of america": "bank-of-america",
+            "bank-of-america": "bank-of-america",
+            "chase bank": "chase-bank",
+            "chase-bank": "chase-bank"
+        }
+        
+        endpoint_key = bank_endpoint_map.get(bank_name.lower(), bank_name.lower())
+        endpoint = self.bank_endpoints.get(endpoint_key)
+        
+        if not endpoint:
+            print(f"❌ Unknown bank: {bank_name}")
+            return [{
+                "bank": bank_name,
+                "response": None,
+                "status": "error",
+                "error": f"Unknown bank: {bank_name}"
+            }]
+        
+        print(f"🎯 BROKER → {bank_name.upper()} NEGOTIATION:")
+        print(f"   🌐 Endpoint: {endpoint}")
+        print(f"   📄 Message: {negotiation_message}")
+        
+        await self._log_audit("negotiation_routing", {
+            "bank_name": bank_name,
+            "endpoint": endpoint,
+            "message_type": "negotiation"
+        })
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{endpoint}",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": f"negotiation_{int(datetime.utcnow().timestamp())}",
+                        "method": "message/send",
+                        "params": {
+                            "id": f"negotiation_{int(datetime.utcnow().timestamp())}",
+                            "message": {
+                                "role": "user",
+                                "parts": [{"text": negotiation_message}],
+                                "messageId": f"negotiation_{int(datetime.utcnow().timestamp())}"
+                            }
+                        }
+                    },
+                    timeout=60.0
+                )
+                
+                print(f"✅ BROKER ← {bank_name.upper()} NEGOTIATION RESPONSE:")
+                print(f"   📊 Status: HTTP {response.status_code}")
+                print(f"   📄 Response: {response.json()}")
+                
+                await self._log_audit("negotiation_response_received", {
+                    "bank": bank_name,
+                    "endpoint": endpoint,
+                    "status": "success",
+                    "response_data": response.json()
+                })
+                
+                return [{
+                    "bank": bank_name,
+                    "response": response.json(),
+                    "status": "success"
+                }]
+                
+        except Exception as e:
+            print(f"❌ BROKER ← {bank_name.upper()} NEGOTIATION ERROR:")
+            print(f"   🚨 Error: {str(e)}")
+            
+            await self._log_audit("negotiation_error", {
+                "bank": bank_name,
+                "endpoint": endpoint,
+                "error": str(e)
+            })
+            
+            return [{
+                "bank": bank_name,
+                "response": None,
+                "status": "error",
+                "error": str(e)
+            }]
+
     async def execute(
         self,
         context: RequestContext,
@@ -228,8 +340,8 @@ class BrokerAgentExecutor(AgentExecutor):
                 "task_id": task.id if task else "unknown"
             })
 
-            # Route to banks
-            bank_responses = await self._route_to_banks(user_input)
+            # Check if this is a negotiation message and route accordingly
+            bank_responses = await self._route_message(user_input)
             
             # Aggregate responses
             aggregated_result = await self._aggregate_responses(bank_responses)

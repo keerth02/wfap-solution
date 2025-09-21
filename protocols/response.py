@@ -1,6 +1,6 @@
 """Bank Offer Response Protocol Definition"""
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 import uuid
 from datetime import datetime
 
@@ -31,3 +31,22 @@ class BankOffer(BaseModel):
     collateral_required: bool = Field(default=False, description="Whether collateral is required")
     personal_guarantee_required: bool = Field(default=False, description="Whether personal guarantee is required")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when offer was created")
+
+class NegotiationRequest(BaseModel):
+    """Company's negotiation request to a bank"""
+    action: str = Field(default="negotiate_offer", description="Action type for negotiation")
+    original_offer_id: str = Field(..., description="ID of the original offer being negotiated")
+    bank_name: str = Field(..., description="Name of the bank to negotiate with")
+    company_name: str = Field(..., description="Name of the company requesting negotiation")
+    negotiation_terms: Dict[str, Any] = Field(..., description="Specific terms being negotiated (interest_rate, term_months, amount, origination_fee)")
+    negotiation_timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when negotiation was initiated")
+
+class CounterOffer(BaseModel):
+    """Bank's counter-offer response to negotiation"""
+    negotiation_id: str = Field(default_factory=lambda: f"NEG_{uuid.uuid4().hex}", description="Unique identifier for this negotiation")
+    original_offer_id: str = Field(..., description="ID of the original offer being negotiated")
+    bank_name: str = Field(..., description="Name of the bank making the counter-offer")
+    company_name: str = Field(..., description="Name of the company receiving the counter-offer")
+    counter_offer: BankOffer = Field(..., description="The bank's counter-offer terms")
+    negotiation_reasoning: str = Field(..., description="Bank's reasoning for the counter-offer terms")
+    negotiation_timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when counter-offer was created")

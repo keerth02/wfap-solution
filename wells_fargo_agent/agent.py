@@ -20,7 +20,7 @@ from google.genai import types
 from collections.abc import AsyncIterable
 
 from protocols.intent import CreditIntent
-from protocols.response import BankOffer, ESGImpact, RepaymentSchedule
+from protocols.response import BankOffer, ESGImpact, RepaymentSchedule, NegotiationRequest, CounterOffer
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -392,8 +392,176 @@ Always be helpful and professional in conversations, but ensure you eventually c
                 "error": f"ESG assessment error: {str(e)}"
             }
 
+    def process_negotiation_request(self, negotiation_data: str) -> Dict[str, Any]:
+        """Process negotiation request and generate counter-offer"""
+        try:
+            # Parse negotiation request
+            if isinstance(negotiation_data, str):
+                negotiation_request = json.loads(negotiation_data)
+            else:
+                negotiation_request = negotiation_data
+            
+            original_offer_id = negotiation_request.get("original_offer_id")
+            bank_name = negotiation_request.get("bank_name", "Wells Fargo")
+            company_name = negotiation_request.get("company_name", "Unknown Company")
+            negotiation_terms = negotiation_request.get("negotiation_terms", {})
+            original_offer = negotiation_request.get("original_offer")
+            
+            # Wells Fargo negotiation policy: Conservative but flexible
+            # - Max 0.5% interest rate reduction
+            # - Flexible on term length (±12 months)
+            # - Moderate origination fee reduction (max 25%)
+            # - Amount adjustments based on creditworthiness
+            
+            requested_rate = negotiation_terms.get("requested_interest_rate", 0)
+            requested_term = negotiation_terms.get("requested_term_months", 0)
+            requested_amount = negotiation_terms.get("requested_amount", 0)
+            requested_origination_fee = negotiation_terms.get("requested_origination_fee", 0)
+            
+            # Generate counter-offer based on Wells Fargo policy
+            counter_offer_data = self.generate_counter_offer(
+                original_offer_id=original_offer_id,
+                bank_name=bank_name,
+                company_name=company_name,
+                requested_rate=requested_rate,
+                requested_term=requested_term,
+                requested_amount=requested_amount,
+                requested_origination_fee=requested_origination_fee,
+                original_offer=original_offer
+            )
+            
+            return {
+                "status": "success",
+                "negotiation_response": counter_offer_data
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to process negotiation request: {str(e)}"
+            }
+
+    def generate_counter_offer(
+        self,
+        original_offer_id: str,
+        bank_name: str,
+        company_name: str,
+        requested_rate: float,
+        requested_term: int,
+        requested_amount: float,
+        requested_origination_fee: float,
+        original_offer: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Generate Wells Fargo counter-offer based on negotiation policy"""
+        
+        # Wells Fargo negotiation policy implementation
+        # Conservative approach with moderate flexibility
+        
+        # Use actual original offer details if provided, otherwise use defaults
+        if original_offer:
+            original_rate = original_offer.get("interest_rate", 6.5)
+            original_term = original_offer.get("term_months", 60)
+            original_amount = original_offer.get("approved_amount", 1000000)
+            original_fee = original_offer.get("origination_fee", 5000)
+        else:
+            # Fallback to defaults if original offer not provided
+            original_rate = 6.5
+            original_term = 60
+            original_amount = 1000000
+            original_fee = 5000
+        
+        # Interest rate: Max 0.5% reduction from original
+        max_rate_reduction = 0.5
+        counter_rate = max(requested_rate, original_rate - max_rate_reduction)
+        
+        # Term: Flexible ±12 months from original
+        term_flexibility = 12
+        if requested_term > 0:
+            counter_term = max(36, min(84, requested_term))  # Between 3-7 years
+        else:
+            counter_term = original_term
+        
+        # Amount: Conservative adjustment
+        if requested_amount > 0:
+            # Wells Fargo allows up to 20% increase for strong credit
+            max_amount_increase = original_amount * 0.2
+            counter_amount = min(requested_amount, original_amount + max_amount_increase)
+        else:
+            counter_amount = original_amount
+        
+        # Origination fee: Max 25% reduction
+        max_fee_reduction = original_fee * 0.25
+        counter_fee = max(requested_origination_fee, original_fee - max_fee_reduction)
+        
+        # Create counter-offer
+        counter_offer = BankOffer(
+            offer_id=f"WF_COUNTER_{uuid.uuid4().hex[:8]}",
+            intent_id=original_offer_id,
+            bank_name=bank_name,
+            bank_id="wells-fargo-001",
+            approved_amount=counter_amount,
+            interest_rate=counter_rate,
+            term_months=counter_term,
+            repayment_schedule=RepaymentSchedule(
+                type="monthly",
+                amount_per_period=counter_amount * (counter_rate/100/12) / (1 - (1 + counter_rate/100/12)**(-counter_term)),
+                number_of_periods=counter_term
+            ),
+            esg_impact=ESGImpact(
+                overall_esg_score=8.5,
+                esg_summary="Wells Fargo maintains strong ESG practices with renewable energy investments and community development programs",
+                carbon_footprint_reduction=15.0
+            ),
+            additional_conditions="Standard Wells Fargo business loan terms apply",
+            reasoning=f"Counter-offer based on Wells Fargo's conservative negotiation policy. Interest rate reduced by {original_rate - counter_rate:.2f}%, term adjusted to {counter_term} months, origination fee reduced by ${original_fee - counter_fee:.0f}",
+            origination_fee=counter_fee,
+            prepayment_penalty=False,
+            collateral_required=False,
+            personal_guarantee_required=True
+        )
+        
+        # Create counter-offer response
+        counter_offer_response = CounterOffer(
+            original_offer_id=original_offer_id,
+            bank_name=bank_name,
+            company_name=company_name,
+            counter_offer=counter_offer,
+            negotiation_reasoning=f"Wells Fargo's counter-offer reflects our conservative lending approach while meeting your key requirements. We've reduced the interest rate by {original_rate - counter_rate:.2f}%, adjusted the term to {counter_term} months, and reduced the origination fee by ${original_fee - counter_fee:.0f}. This offer maintains our risk standards while providing competitive terms."
+        )
+        
+        return counter_offer_response.model_dump(mode='json')
+
     async def stream(self, query, session_id) -> AsyncIterable[dict[str, Any]]:
         """Stream agent responses"""
+        
+        # Check if this is a negotiation message and handle it directly
+        try:
+            import json
+            message_data = json.loads(query)
+            
+            if message_data.get("action") == "negotiate_offer":
+                # Handle negotiation request directly
+                result = self.process_negotiation_request(query)
+                
+                if result["status"] == "success":
+                    negotiation_response = result["negotiation_response"]
+                    yield {
+                        'content': json.dumps(negotiation_response, indent=2),
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                    }
+                    return
+                else:
+                    yield {
+                        'content': f"Negotiation processing failed: {result['error']}",
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                    }
+                    return
+        except (json.JSONDecodeError, AttributeError):
+            # Not a negotiation message, continue with normal processing
+            pass
+        
         session = await self._runner.session_service.get_session(
             app_name=self._agent.name,
             user_id=self._user_id,

@@ -20,7 +20,7 @@ from google.genai import types
 from collections.abc import AsyncIterable
 
 from protocols.intent import CreditIntent, CompanyInfo
-from protocols.response import BankOffer, ESGImpact
+from protocols.response import BankOffer, ESGImpact, NegotiationRequest, CounterOffer
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -49,6 +49,122 @@ class CompanyAgent:
         # Store received offers and evaluated offers
         self.received_offers = []
         self.evaluated_offers = []
+        
+        # File-based persistence
+        self.persistence_file = os.path.join(os.path.dirname(__file__), "company_agent_state.json")
+        self._load_state()
+
+    def _load_state(self):
+        """Load agent state from file"""
+        try:
+            if os.path.exists(self.persistence_file):
+                with open(self.persistence_file, 'r') as f:
+                    state = json.load(f)
+                    self.received_offers = state.get('received_offers', [])
+                    self.evaluated_offers = state.get('evaluated_offers', [])
+        except Exception as e:
+            print(f"Warning: Could not load state from {self.persistence_file}: {e}")
+            self.received_offers = []
+            self.evaluated_offers = []
+
+    def _save_state(self):
+        """Save agent state to file"""
+        try:
+            state = {
+                'received_offers': self.received_offers,
+                'evaluated_offers': self.evaluated_offers,
+                'last_updated': datetime.utcnow().isoformat()
+            }
+            with open(self.persistence_file, 'w') as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Could not save state to {self.persistence_file}: {e}")
+
+    def assess_counter_offer(
+        self,
+        counter_offer_data: str,
+        tool_context: ToolContext = None
+    ) -> Dict[str, Any]:
+        """Evaluate the bank's counter-offer and decide whether to accept or reject."""
+        try:
+            # Parse counter-offer data
+            if isinstance(counter_offer_data, str):
+                counter_offer = json.loads(counter_offer_data)
+            else:
+                counter_offer = counter_offer_data
+            
+            original_offer_id = counter_offer.get("original_offer_id", "Unknown")
+            negotiation_id = counter_offer.get("negotiation_id", "Unknown")
+            bank_name = counter_offer.get("bank_name", "Unknown Bank")
+            counter_offer_details = counter_offer.get("counter_offer", {})
+            negotiation_reasoning = counter_offer.get("negotiation_reasoning", "")
+            
+            # Extract key terms for evaluation
+            interest_rate = counter_offer_details.get("interest_rate", 0)
+            term_months = counter_offer_details.get("term_months", 0)
+            approved_amount = counter_offer_details.get("approved_amount", 0)
+            origination_fee = counter_offer_details.get("origination_fee", 0)
+            esg_score = counter_offer_details.get("esg_impact", {}).get("overall_esg_score", 0)
+            
+            # Company evaluation criteria
+            # Accept if: interest rate ≤ 6.0%, term ≥ 48 months, amount ≥ $800K, origination fee ≤ $3K, ESG score ≥ 7.0
+            acceptable_rate = interest_rate <= 6.0
+            acceptable_term = term_months >= 48
+            acceptable_amount = approved_amount >= 800000
+            acceptable_fee = origination_fee <= 3000
+            acceptable_esg = esg_score >= 7.0
+            
+            # Calculate overall acceptability
+            criteria_met = sum([acceptable_rate, acceptable_term, acceptable_amount, acceptable_fee, acceptable_esg])
+            total_criteria = 5
+            acceptance_percentage = (criteria_met / total_criteria) * 100
+            
+            # Decision logic
+            if acceptance_percentage >= 80:  # Accept if 80%+ criteria met
+                decision = "ACCEPT"
+                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Key benefits: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
+            elif acceptance_percentage >= 60:  # Consider if 60-79% criteria met
+                decision = "CONSIDER"
+                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Mixed terms: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score. Consider negotiating further."
+            else:  # Reject if <60% criteria met
+                decision = "REJECT"
+                reasoning = f"Counter-offer meets only {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Terms not favorable: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
+            
+            # Store counter-offer for potential acceptance
+            if decision == "ACCEPT":
+                self.received_offers.append(counter_offer_details)
+                self._save_state()  # Save to file for persistence
+            
+            return {
+                "status": "success",
+                "decision": decision,
+                "reasoning": reasoning,
+                "criteria_evaluation": {
+                    "interest_rate_acceptable": acceptable_rate,
+                    "term_acceptable": acceptable_term,
+                    "amount_acceptable": acceptable_amount,
+                    "origination_fee_acceptable": acceptable_fee,
+                    "esg_score_acceptable": acceptable_esg,
+                    "criteria_met": criteria_met,
+                    "total_criteria": total_criteria,
+                    "acceptance_percentage": acceptance_percentage
+                },
+                "counter_offer_summary": {
+                    "bank_name": bank_name,
+                    "interest_rate": interest_rate,
+                    "term_months": term_months,
+                    "approved_amount": approved_amount,
+                    "origination_fee": origination_fee,
+                    "esg_score": esg_score,
+                    "negotiation_reasoning": negotiation_reasoning
+                }
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to evaluate counter-offer: {str(e)}"
+            }
 
     def get_processing_message(self) -> str:
         return 'Processing your credit request and communicating with banks...'
@@ -76,9 +192,26 @@ WORKFLOW:
 4. If bank questions received, use handle_bank_questions() to process them
 5. If offers received, evaluate using evaluate_offers()
 6. Select best offer using select_best_offer()
-7. Optionally negotiate using negotiate_offer()
+7. Optionally negotiate using negotiate_offer() with the selected bank
+8. If negotiation response received, evaluate using assess_counter_offer()
+9. Make final decision: accept counter-offer or reject and seek new offers
 
 CRITICAL: After creating a credit intent, you MUST call send_credit_request_to_broker() with the intent data. Do not just describe what you would do - actually call the function.
+
+NEGOTIATION WORKFLOW:
+- After selecting the best offer, you can negotiate with that specific bank only
+- Use negotiate_offer(offer_id, negotiation_terms, offer_details) to send negotiation terms
+- IMPORTANT: Always include the complete offer_details as the third parameter (JSON string of the offer)
+- The broker will route negotiation requests ONLY to the selected bank
+- When you receive a counter-offer response, use assess_counter_offer() to assess it
+- Counter-offer evaluation considers: interest rate ≤ 6.0%, term ≥ 48 months, amount ≥ $800K, origination fee ≤ $3K, ESG score ≥ 7.0
+- Make final decision: ACCEPT (80%+ criteria met), CONSIDER (60-79% criteria met), or REJECT (<60% criteria met)
+
+COUNTER-OFFER IDENTIFICATION:
+- Look for JSON responses containing: "counter_offer", "negotiation_id", "negotiation_reasoning"
+- Counter-offers come from banks after you send a negotiation request
+- They contain structured loan terms with updated rates, terms, amounts, or fees
+- ALWAYS use assess_counter_offer() for these responses, NOT handle_bank_questions()
 
 DATA INTEGRITY REQUIREMENTS:
 - Only use information explicitly provided by the user
@@ -90,6 +223,8 @@ DATA INTEGRITY REQUIREMENTS:
 CONDITIONAL RESPONSES:
 - If banks ask for more information (text responses), use handle_bank_questions() to process them
 - If banks provide structured offers, use evaluate_offers() and select_best_offer()
+- If banks provide counter-offers (negotiation responses with "counter_offer" field), use assess_counter_offer() to assess them
+- Counter-offers are identified by: "counter_offer" field, "negotiation_id" field, or "negotiation_reasoning" field
 - You may need to gather additional information from the user and resend to banks
 
 COMPREHENSIVE OFFER EVALUATION (BASED ONLY ON STRUCTURED BANK OFFERS):
@@ -181,6 +316,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                 self.select_best_offer,
                 self.handle_bank_questions,
                 self.negotiate_offer,
+                self.assess_counter_offer,
             ],
         )
 
@@ -323,6 +459,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                                             offers = broker_data["aggregated_result"].get("offers", [])
                                             text_responses = broker_data["aggregated_result"].get("text_responses", [])
                                             self.received_offers = offers
+                                            self._save_state()  # Save to file for persistence
                                             
                                             # Handle text responses from banks
                                             bank_questions = []
@@ -663,29 +800,42 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
         self,
         offer_id: str,
         negotiation_terms: str,
+        offer_details: Optional[str] = None,
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
         """Send counter-offer for negotiation."""
         try:
-            # Find the offer to negotiate
+            # Try to find the offer to negotiate
             target_offer = None
-            for offer in self.received_offers:
-                if offer.get("offer_id") == offer_id:
-                    target_offer = offer
-                    break
+            
+            # First, try to use offer_details if provided
+            if offer_details:
+                try:
+                    target_offer = json.loads(offer_details)
+                except json.JSONDecodeError:
+                    pass  # Fall back to received_offers search
+            
+            # If no offer_details or invalid JSON, search in received_offers
+            if not target_offer:
+                for offer in self.received_offers:
+                    if offer.get("offer_id") == offer_id:
+                        target_offer = offer
+                        break
             
             if not target_offer:
                 return {
                     "status": "error",
-                    "error": f"Offer {offer_id} not found"
+                    "error": f"Offer {offer_id} not found. Please provide the offer details as a parameter."
                 }
             
-            # Create negotiation request
+            # Create negotiation request with original offer details
             negotiation_request = {
-                "offer_id": offer_id,
+                "action": "negotiate_offer",
+                "original_offer_id": offer_id,
                 "bank_name": target_offer.get("bank_name"),
+                "company_name": target_offer.get("company_name", "Unknown Company"),
                 "negotiation_terms": negotiation_terms,
-                "original_offer": target_offer,
+                "original_offer": target_offer,  # Include the complete original offer
                 "negotiation_timestamp": datetime.utcnow().isoformat()
             }
             
@@ -764,6 +914,8 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                 state={},
                 session_id=session_id,
             )
+        
+        # State is automatically loaded from file in __init__
         async for event in self._runner.run_async(
             user_id=self._user_id, session_id=session.id, new_message=content
         ):
