@@ -9,9 +9,11 @@ from datetime import datetime
 # Add parent directory to path for protocols import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Authentication removed - no longer needed
+# HMAC Signature validation for secure agent communication
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
+from signature_utils import generate_signature, validate_signature, extract_signature_from_message
+from secrets_manager import SecretsManager
 from a2a.server.events import EventQueue
 from a2a.types import (
     TaskArtifactUpdateEvent,
@@ -26,7 +28,7 @@ from a2a.utils import new_agent_text_message, new_task, new_text_artifact
 import httpx
 
 class BrokerAgentExecutor(AgentExecutor):
-    """Broker Agent Executor for pure message routing (no authentication)"""
+    """Broker Agent Executor with HMAC signature validation for secure message routing"""
 
     def __init__(self):
         # Bank endpoints
@@ -39,7 +41,9 @@ class BrokerAgentExecutor(AgentExecutor):
         # Simple audit log for routing events
         self.audit_log = []
         
-        # Authentication endpoints removed - no longer needed
+        # Initialize secrets manager for signature validation
+        self.secrets_manager = SecretsManager()
+        print("🔐 BROKER: Initialized with HMAC signature validation")
 
     async def _log_audit(self, action: str, details: Dict[str, Any] = None):
         """Log audit trail with detailed information"""
@@ -53,18 +57,101 @@ class BrokerAgentExecutor(AgentExecutor):
         if details:
             print(f"   📋 Details: {json.dumps(details, indent=2)}")
     
-    # Authentication methods removed - no longer needed
+    async def _validate_message_signature(self, message_content: str, agent_id: str) -> bool:
+        """
+        Validate HMAC signature for incoming message
+        
+        Args:
+            message_content: JSON string containing message data
+            agent_id: Identifier of the sending agent
+            
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        try:
+            print(f"🔐 BROKER: Validating signature for message from {agent_id}")
+            
+            # Parse message content
+            message_data = json.loads(message_content)
+            
+            # Extract signature from message
+            message_without_signature, signature = extract_signature_from_message(message_data)
+            
+            if not signature:
+                print(f"❌ BROKER: No signature found in message from {agent_id}")
+                return False
+            
+            # Get agent's secret key
+            secret_key = self.secrets_manager.get_secret(agent_id)
+            if not secret_key:
+                print(f"❌ BROKER: No secret key found for agent {agent_id}")
+                return False
+            
+            # Validate signature
+            is_valid = validate_signature(message_without_signature, signature, secret_key)
+            
+            if is_valid:
+                print(f"✅ BROKER: Signature valid for {agent_id}")
+                await self._log_audit("signature_validated", {
+                    "agent_id": agent_id,
+                    "message_type": message_data.get("message_type", "unknown"),
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            else:
+                print(f"❌ BROKER: Signature invalid for {agent_id}")
+                await self._log_audit("signature_invalid", {
+                    "agent_id": agent_id,
+                    "message_type": message_data.get("message_type", "unknown"),
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            
+            return is_valid
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ BROKER: Invalid JSON in message from {agent_id}: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ BROKER: Signature validation error for {agent_id}: {e}")
+            return False
     
-    # All authentication methods removed - no longer needed
+    def _add_signature_to_message(self, message_content: str) -> str:
+        """
+        Add broker's signature to outgoing message
+        
+        Args:
+            message_content: JSON string containing message data
+            
+        Returns:
+            JSON string with broker's signature added
+        """
+        try:
+            message_data = json.loads(message_content)
+            
+            # Get broker's secret key
+            secret_key = self.secrets_manager.get_secret("broker-agent")
+            if not secret_key:
+                print(f"❌ BROKER: No secret key found for broker-agent")
+                return message_content
+            
+            # Generate signature
+            signature = generate_signature(message_data, secret_key)
+            message_data['signature'] = signature
+            
+            print(f"🔐 BROKER: Added signature to outgoing message")
+            return json.dumps(message_data)
+            
+        except Exception as e:
+            print(f"❌ BROKER: Signature generation error: {e}")
+            return message_content
 
     async def _route_to_banks(self, message_content: str) -> List[Dict[str, Any]]:
-        """Route message content to all bank agents (no authentication)"""
+        """Route message content to all bank agents with HMAC signature"""
         responses = []
         
         async with httpx.AsyncClient() as client:
             for bank_name, endpoint in self.bank_endpoints.items():
                 try:
-                    # Create message for bank (no authentication)
+                    # Create message for bank
                     bank_message = {
                         "message_type": "credit_intent",
                         "agent_id": "broker-agent",
@@ -73,6 +160,10 @@ class BrokerAgentExecutor(AgentExecutor):
                         "source": "broker",
                         "target_bank": bank_name
                     }
+                    
+                    # Add broker's signature to the message
+                    bank_message_json = json.dumps(bank_message)
+                    bank_message_with_signature = self._add_signature_to_message(bank_message_json)
                     
                     print(f"📤 BROKER → {bank_name.upper()}: Sending message")
                     print(f"   👤 Agent ID: broker-agent")
@@ -92,7 +183,7 @@ class BrokerAgentExecutor(AgentExecutor):
                                     "parts": [
                                         {
                                             "type": "text",
-                                            "text": json.dumps(bank_message)
+                                            "text": bank_message_with_signature
                                         }
                                     ]
                                 }
@@ -276,7 +367,7 @@ class BrokerAgentExecutor(AgentExecutor):
         
         try:
             async with httpx.AsyncClient() as client:
-                # Create negotiation message for bank (no authentication)
+                # Create negotiation message for bank
                 negotiation_message_content = {
                     "message_type": "negotiation_request",
                     "agent_id": "broker-agent",
@@ -285,6 +376,10 @@ class BrokerAgentExecutor(AgentExecutor):
                     "source": "broker",
                     "target_bank": bank_name
                 }
+                
+                # Add broker's signature to the negotiation message
+                negotiation_message_json = json.dumps(negotiation_message_content)
+                negotiation_message_with_signature = self._add_signature_to_message(negotiation_message_json)
                 
                 print(f"📤 BROKER → {bank_name.upper()}: Sending negotiation")
                 print(f"   👤 Agent ID: broker-agent")
@@ -299,7 +394,7 @@ class BrokerAgentExecutor(AgentExecutor):
                             "id": f"negotiation_{int(datetime.utcnow().timestamp())}",
                             "message": {
                                 "role": "user",
-                                "parts": [{"text": json.dumps(negotiation_message_content)}],
+                                "parts": [{"text": negotiation_message_with_signature}],
                                 "messageId": f"negotiation_{int(datetime.utcnow().timestamp())}"
                             }
                         }
@@ -348,7 +443,7 @@ class BrokerAgentExecutor(AgentExecutor):
         context: RequestContext,
         event_queue: EventQueue,
     ) -> None:
-        """Execute broker agent logic - pure message routing (no authentication)"""
+        """Execute broker agent logic with HMAC signature validation"""
         user_input = context.get_user_input()
         task = context.current_task
 
@@ -369,6 +464,43 @@ class BrokerAgentExecutor(AgentExecutor):
                     task_id=task.id,
                 )
             )
+            
+            # Parse message to get agent_id for signature validation
+            try:
+                message_data = json.loads(user_input)
+                agent_id = message_data.get('agent_id', 'unknown')
+                message_type = message_data.get('message_type', 'unknown')
+                
+                print(f"🔐 BROKER: Processing message from {agent_id} (type: {message_type})")
+                
+                # Validate signature for intents and offers
+                if message_type in ['credit_intent', 'negotiation_request']:
+                    if not self._validate_message_signature(user_input, agent_id):
+                        print(f"❌ BROKER: Rejecting message from {agent_id} - invalid signature")
+                        await event_queue.enqueue_event(
+                            TaskStatusUpdateEvent(
+                                status=TaskStatus(state=TaskState.failed),
+                                final=True,
+                                context_id=task.context_id,
+                                task_id=task.id,
+                            )
+                        )
+                        return
+                    print(f"✅ BROKER: Signature validated for {agent_id}")
+                else:
+                    print(f"ℹ️ BROKER: No signature validation needed for message type: {message_type}")
+                    
+            except json.JSONDecodeError:
+                print("❌ BROKER: Invalid JSON format in message")
+                await event_queue.enqueue_event(
+                    TaskStatusUpdateEvent(
+                        status=TaskStatus(state=TaskState.failed),
+                        final=True,
+                        context_id=task.context_id,
+                        task_id=task.id,
+                    )
+                )
+                return
 
             # Log incoming message with full content
             print(f"📨 BROKER RECEIVED MESSAGE:")

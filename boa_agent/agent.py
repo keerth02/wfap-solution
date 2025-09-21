@@ -9,9 +9,11 @@ from datetime import datetime, timedelta
 # Add parent directory to path for protocols import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Authentication removed - no longer needed
+# HMAC Signature generation for secure agent communication
 
 from google.adk.agents.llm_agent import LlmAgent
+from signature_utils import generate_signature
+from secrets_manager import SecretsManager
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
@@ -44,13 +46,41 @@ class BOAAgent:
             memory_service=InMemoryMemoryService(),
         )
         
-        # Authentication removed - no longer needed
+        # Initialize secrets manager for signature generation
+        self.secrets_manager = SecretsManager()
+        print("🔐 BANK OF AMERICA: Initialized with HMAC signature generation")
         
 
     def get_processing_message(self) -> str:
         return 'Bank of America is evaluating your credit request...'
     
-    # Authentication methods removed - no longer needed
+    def _add_signature_to_message(self, message_content: dict) -> dict:
+        """
+        Add Bank of America agent's signature to message
+        
+        Args:
+            message_content: Dictionary containing message data
+            
+        Returns:
+            Dictionary with signature added
+        """
+        try:
+            # Get Bank of America agent's secret key
+            secret_key = self.secrets_manager.get_secret("boa-agent")
+            if not secret_key:
+                print("❌ BANK OF AMERICA: No secret key found for boa-agent")
+                return message_content
+            
+            # Generate signature
+            signature = generate_signature(message_content, secret_key)
+            message_content['signature'] = signature
+            
+            print(f"🔐 BANK OF AMERICA: Added signature to message")
+            return message_content
+            
+        except Exception as e:
+            print(f"❌ BANK OF AMERICA: Signature generation error: {e}")
+            return message_content
 
 
 
@@ -254,8 +284,11 @@ Always be helpful and professional in conversations, but ensure you eventually c
                 personal_guarantee_required=approved_credit_limit > 750000  # Higher threshold than Wells Fargo
             )
             
-            # Return offer without JWT signing
+            # Return offer with HMAC signature
             offer_dict = bank_offer.model_dump(mode='json')
+            
+            # Add signature to the offer
+            offer_dict = self._add_signature_to_message(offer_dict)
             
             return {
                 "status": "success",
@@ -599,6 +632,9 @@ Always be helpful and professional in conversations, but ensure you eventually c
                     print(f"      📈 Interest Rate: {negotiation_response['counter_offer']['interest_rate']}%")
                     print(f"      📅 Draw Period: {negotiation_response['counter_offer']['line_of_credit_schedule']['draw_period_months']} months")
                     print(f"      🏦 Counter-Offer ID: {negotiation_response['counter_offer']['offer_id']}")
+                    
+                    # Add signature to the negotiation response
+                    negotiation_response = self._add_signature_to_message(negotiation_response)
                     
                     yield {
                         'content': json.dumps(negotiation_response, indent=2),

@@ -9,9 +9,11 @@ from datetime import datetime, timedelta
 # Add parent directory to path for protocols import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Authentication removed - no longer needed
+# HMAC Signature generation for secure agent communication
 
 from google.adk.agents.llm_agent import LlmAgent
+from signature_utils import generate_signature
+from secrets_manager import SecretsManager
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
@@ -44,7 +46,9 @@ class CompanyAgent:
             memory_service=InMemoryMemoryService(),
         )
         
-        # Authentication removed - no longer needed
+        # Initialize secrets manager for signature generation
+        self.secrets_manager = SecretsManager()
+        print("🔐 ROGUE AGENT: Initialized with HMAC signature generation")
         
         
         # Broker endpoint
@@ -251,7 +255,33 @@ class CompanyAgent:
     def get_processing_message(self) -> str:
         return 'Processing your credit request and communicating with banks...'
     
-    # Authentication methods removed - no longer needed
+    def _add_signature_to_message(self, message_content: dict) -> dict:
+        """
+        Add rogue agent's signature to message
+        
+        Args:
+            message_content: Dictionary containing message data
+            
+        Returns:
+            Dictionary with signature added
+        """
+        try:
+            # Get rogue agent's secret key
+            secret_key = self.secrets_manager.get_secret("rogue-agent")
+            if not secret_key:
+                print("❌ ROGUE AGENT: No secret key found for rogue-agent")
+                return message_content
+            
+            # Generate signature
+            signature = generate_signature(message_content, secret_key)
+            message_content['signature'] = signature
+            
+            print(f"🔐 ROGUE AGENT: Added signature to message")
+            return message_content
+            
+        except Exception as e:
+            print(f"❌ ROGUE AGENT: Signature generation error: {e}")
+            return message_content
 
     def _build_agent(self) -> LlmAgent:
         """Builds the LLM agent for the company agent."""
@@ -484,15 +514,18 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             # Convert other types to string and wrap
             intent_dict = {"raw_text": str(intent_data)}
         
-        # Send to broker via A2A - Send structured intent data (no authentication)
+        # Send to broker via A2A - Send structured intent data with HMAC signature
         async def _send_to_broker():
-            # Create message content (no authentication)
+            # Create message content
             message_content = {
                 "message_type": "credit_intent",
                 "agent_id": "rogue-agent",
                 "data": intent_dict,
                 "timestamp": datetime.utcnow().isoformat()
             }
+            
+            # Add rogue agent's signature to the message
+            message_content = self._add_signature_to_message(message_content)
             
             print(f"📤 ROGUE AGENT → BROKER: Sending credit request")
             print(f"   👤 Agent ID: rogue-agent")
@@ -955,15 +988,18 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             print(f"      📋 Request ID: {offer_id}")
             print(f"      🌐 Broker Endpoint: {self.broker_endpoint}")
             
-            # Send negotiation request to broker for routing to specific bank (no authentication)
+            # Send negotiation request to broker for routing to specific bank with HMAC signature
             async def _send_negotiation():
-                # Create negotiation message (no authentication)
+                # Create negotiation message
                 negotiation_message = {
                     "message_type": "negotiation_request",
                     "agent_id": "rogue-agent",
                     "data": negotiation_request,
                     "timestamp": datetime.utcnow().isoformat()
                 }
+                
+                # Add rogue agent's signature to the negotiation message
+                negotiation_message = self._add_signature_to_message(negotiation_message)
                 
                 print(f"📤 ROGUE AGENT → BROKER: Sending negotiation request")
                 print(f"   👤 Agent ID: rogue-agent")

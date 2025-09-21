@@ -1,8 +1,8 @@
 {
   "received_offers": [
     {
-      "offer_id": "OFFER_b8a4b22dee4441b9ab83d17b94d2da40",
-      "intent_id": "INTENT_a750dfa8771947298b19f0d089fa4621",
+      "offer_id": "OFFER_be5f103d44ae45fdb54227b3eb9030a4",
+      "intent_id": "INTENT_8524bf65b1454559908dcb4a63730bcc",
       "bank_name": "Bank of America",
       "bank_id": "BOA001",
       "approved_credit_limit": 2000000.0,
@@ -22,21 +22,22 @@
         "carbon_footprint_reduction": 25.5
       },
       "additional_conditions": "Standard Bank of America terms apply. Innovation-focused companies may qualify for additional benefits.",
-      "reasoning": "Approved line of credit with innovation focus based on credit score 780, annual revenue $15,000,000, and ESG score 8.5/10. Bank of America's competitive approach supports growth and innovation with flexible working capital access.",
+      "reasoning": "Approved line of credit with innovation focus based on credit score 780, annual revenue $15,000,000, and ESG score 8.5/10. Bank of America's competitive approach supports growth and innovation with flexible working capital access. Counter-offer provided to reduce interest rate based on TechCorp Inc's strong financial standing and ESG commitment.",
       "origination_fee": 6000.0,
       "prepayment_penalty": false,
       "collateral_required": true,
       "personal_guarantee_required": true,
-      "created_at": "2025-09-21T20:32:02.061434",
+      "created_at": "2025-09-21T21:17:51.397402",
+      "signature": "b4z5Nd0V77F1K62iP9yNrC0jWbQ/m41ODw+S0vR7Vlw=",
       "counter_offer": true,
-      "negotiation_id": "NEG_4c47a9b797f140a7b6f87e11c049843f",
-      "negotiation_reasoning": "We can meet you halfway and offer 2.5% interest rate."
+      "negotiation_id": "NEG_f7e10d8d8a98413884628cd72a73f5c1",
+      "negotiation_reasoning": "Reduced interest rate by 0.5% based on TechCorp Inc's strong financials and ESG commitment."
     }
   ],
   "evaluated_offers": [
     {
-      "offer_id": "OFFER_b8a4b22dee4441b9ab83d17b94d2da40",
-      "intent_id": "INTENT_a750dfa8771947298b19f0d089fa4621",
+      "offer_id": "OFFER_be5f103d44ae45fdb54227b3eb9030a4",
+      "intent_id": "INTENT_8524bf65b1454559908dcb4a63730bcc",
       "bank_name": "Bank of America",
       "bank_id": "BOA001",
       "approved_credit_limit": 2000000.0,
@@ -61,7 +62,8 @@
       "prepayment_penalty": false,
       "collateral_required": true,
       "personal_guarantee_required": true,
-      "created_at": "2025-09-21T20:32:02.061434",
+      "created_at": "2025-09-21T21:16:46.150395",
+      "signature": "/lBjWAHST1AzRLjLMyR9WY037F1YLdFKXtbvBj+A2hQ=",
       "carbon_adjusted_rate": 1.73,
       "total_cost_of_borrowing": 71600.0,
       "effective_rate": 3.28,
@@ -75,11 +77,11 @@
       "total_annual_cost": 65600.0,
       "utilized_amount": 1400000.0,
       "unused_amount": 600000.0,
-      "evaluation_timestamp": "2025-09-21T20:32:20.993440"
+      "evaluation_timestamp": "2025-09-21T21:17:04.834571"
     },
     {
-      "offer_id": "OFFER_2e8a6605b50f4ee388f5e0e401ccbf99",
-      "intent_id": "INTENT_a750dfa8771947298b19f0d089fa4621",
+      "offer_id": "OFFER_93387a0af6f04c5fb40ce8c494cf1598",
+      "intent_id": "INTENT_8524bf65b1454559908dcb4a63730bcc",
       "bank_name": "Chase Bank",
       "bank_id": "CHASE001",
       "approved_credit_limit": 2000000.0,
@@ -104,7 +106,8 @@
       "prepayment_penalty": false,
       "collateral_required": true,
       "personal_guarantee_required": true,
-      "created_at": "2025-09-21T20:32:07.997036",
+      "created_at": "2025-09-21T21:16:51.784676",
+      "signature": "bdwz44qr4uoKCohcAZCtywgXhY/pAXk/2NVxfkfCedw=",
       "carbon_adjusted_rate": 2.76,
       "total_cost_of_borrowing": 86600.0,
       "effective_rate": 3.93,
@@ -118,11 +121,11 @@
       "total_annual_cost": 78600.0,
       "utilized_amount": 1400000.0,
       "unused_amount": 600000.0,
-      "evaluation_timestamp": "2025-09-21T20:32:20.993475"
+      "evaluation_timestamp": "2025-09-21T21:17:04.834596"
     },
     {
-      "offer_id": "OFFER_aad92151d6c24f649355f0c3ccd0b6e6",
-      "intent_id": "INTENT_a750dfa8771947298b19f0d089fa4621",
+      "offer_id": "OFFER_91a55083c6e243c59a7b2ef63fbf03b0",
+      "intent_id": "INTENT_8524bf65b1454559908dcb4a63730bcc",
       "bank_name": "Wells Fargo",
       "bank_id": "WF001",
       "approved_credit_limit": 1900000.0,
@@ -147,7 +150,8 @@
       "prepayment_penalty": false,
       "collateral_required": true,
       "personal_guarantee_required": true,
-      "created_at": "2025-09-21T20:31:56.221888",
+      "created_at": "2025-09-21T21:16:38.762936",
+      "signature": "YDRpEgMelFlu3hDkMPTvtboRtx1ulLEC1iGXQPhbNfg=",
       "carbon_adjusted_rate": 4.12,
       "total_cost_of_borrowing": 107350.0,
       "effective_rate": 5.15,
@@ -161,8 +165,8 @@
       "total_annual_cost": 97850.0,
       "utilized_amount": 1330000.0,
       "unused_amount": 570000.0,
-      "evaluation_timestamp": "2025-09-21T20:32:20.993388"
+      "evaluation_timestamp": "2025-09-21T21:17:04.834522"
     }
   ],
-  "last_updated": "2025-09-21T20:33:10.454039"
+  "last_updated": "2025-09-21T21:18:17.945523"
 }
