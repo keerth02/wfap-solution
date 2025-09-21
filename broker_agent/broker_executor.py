@@ -78,30 +78,66 @@ class BrokerAgentExecutor(AgentExecutor):
             message_without_signature, signature = extract_signature_from_message(message_data)
             
             if not signature:
-                print(f"❌ BROKER: No signature found in message from {agent_id}")
+                print(f"❌ BROKER SIGNATURE VALIDATION FAILED:")
+                print(f"   🔐 Agent: {agent_id}")
+                print(f"   📝 Message Type: {message_data.get('message_type', 'unknown')}")
+                print(f"   ⚠️  Reason: No signature found in message")
+                print(f"   ⏰ Timestamp: {datetime.utcnow().isoformat()}")
+                await self._log_audit("signature_missing", {
+                    "agent_id": agent_id,
+                    "message_type": message_data.get("message_type", "unknown"),
+                    "validation_status": "FAILED",
+                    "failure_reason": "No signature found in message",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
                 return False
             
             # Get agent's secret key
             secret_key = self.secrets_manager.get_secret(agent_id)
             if not secret_key:
-                print(f"❌ BROKER: No secret key found for agent {agent_id}")
+                print(f"❌ BROKER SIGNATURE VALIDATION FAILED:")
+                print(f"   🔐 Agent: {agent_id}")
+                print(f"   📝 Message Type: {message_data.get('message_type', 'unknown')}")
+                print(f"   ⚠️  Reason: No secret key found for agent")
+                print(f"   ⏰ Timestamp: {datetime.utcnow().isoformat()}")
+                await self._log_audit("secret_key_missing", {
+                    "agent_id": agent_id,
+                    "message_type": message_data.get("message_type", "unknown"),
+                    "validation_status": "FAILED",
+                    "failure_reason": f"No secret key found for agent {agent_id}",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
                 return False
             
             # Validate signature
             is_valid = validate_signature(message_without_signature, signature, secret_key)
             
             if is_valid:
-                print(f"✅ BROKER: Signature valid for {agent_id}")
+                print(f"✅ BROKER SIGNATURE VALIDATION SUCCESS:")
+                print(f"   🔐 Agent: {agent_id}")
+                print(f"   📝 Message Type: {message_data.get('message_type', 'unknown')}")
+                print(f"   🔑 Signature: {signature[:16]}...{signature[-8:]}")
+                print(f"   ⏰ Timestamp: {datetime.utcnow().isoformat()}")
                 await self._log_audit("signature_validated", {
                     "agent_id": agent_id,
                     "message_type": message_data.get("message_type", "unknown"),
+                    "signature_preview": f"{signature[:16]}...{signature[-8:]}",
+                    "validation_status": "SUCCESS",
                     "timestamp": datetime.utcnow().isoformat()
                 })
             else:
-                print(f"❌ BROKER: Signature invalid for {agent_id}")
+                print(f"❌ BROKER SIGNATURE VALIDATION FAILED:")
+                print(f"   🔐 Agent: {agent_id}")
+                print(f"   📝 Message Type: {message_data.get('message_type', 'unknown')}")
+                print(f"   🔑 Signature: {signature[:16]}...{signature[-8:]}")
+                print(f"   ⏰ Timestamp: {datetime.utcnow().isoformat()}")
+                print(f"   ⚠️  Reason: HMAC signature validation failed")
                 await self._log_audit("signature_invalid", {
                     "agent_id": agent_id,
                     "message_type": message_data.get("message_type", "unknown"),
+                    "signature_preview": f"{signature[:16]}...{signature[-8:]}",
+                    "validation_status": "FAILED",
+                    "failure_reason": "HMAC signature validation failed",
                     "timestamp": datetime.utcnow().isoformat()
                 })
             
@@ -137,7 +173,11 @@ class BrokerAgentExecutor(AgentExecutor):
             signature = generate_signature(message_data, secret_key)
             message_data['signature'] = signature
             
-            print(f"🔐 BROKER: Added signature to outgoing message")
+            print(f"🔐 BROKER: SIGNATURE GENERATION SUCCESS")
+            print(f"   📤 Direction: Outgoing message")
+            print(f"   📝 Message Type: {message_data.get('message_type', 'unknown')}")
+            print(f"   🔑 Signature: {signature[:16]}...{signature[-8:]}")
+            print(f"   ⏰ Timestamp: {datetime.utcnow().isoformat()}")
             return json.dumps(message_data)
             
         except Exception as e:
@@ -475,8 +515,15 @@ class BrokerAgentExecutor(AgentExecutor):
                 
                 # Validate signature for intents and offers
                 if message_type in ['credit_intent', 'negotiation_request']:
-                    if not self._validate_message_signature(user_input, agent_id):
-                        print(f"❌ BROKER: Rejecting message from {agent_id} - invalid signature")
+                    print(f"🔐 BROKER: Starting signature validation for {agent_id}")
+                    print(f"   📝 Message Type: {message_type}")
+                    print(f"   📏 Message Length: {len(user_input)} characters")
+                    
+                    if not await self._validate_message_signature(user_input, agent_id):
+                        print(f"🚫 BROKER: MESSAGE REJECTED - SIGNATURE VALIDATION FAILED")
+                        print(f"   🔐 Agent: {agent_id}")
+                        print(f"   📝 Message Type: {message_type}")
+                        print(f"   ⚠️  Action: Marking task as failed")
                         await event_queue.enqueue_event(
                             TaskStatusUpdateEvent(
                                 status=TaskStatus(state=TaskState.failed),
@@ -486,9 +533,15 @@ class BrokerAgentExecutor(AgentExecutor):
                             )
                         )
                         return
-                    print(f"✅ BROKER: Signature validated for {agent_id}")
+                    
+                    print(f"🎉 BROKER: MESSAGE ACCEPTED - SIGNATURE VALIDATION PASSED")
+                    print(f"   🔐 Agent: {agent_id}")
+                    print(f"   📝 Message Type: {message_type}")
+                    print(f"   ✅ Action: Proceeding with message routing")
                 else:
-                    print(f"ℹ️ BROKER: No signature validation needed for message type: {message_type}")
+                    print(f"ℹ️ BROKER: SIGNATURE VALIDATION SKIPPED")
+                    print(f"   📝 Message Type: {message_type}")
+                    print(f"   📋 Reason: Message type does not require signature validation")
                     
             except json.JSONDecodeError:
                 print("❌ BROKER: Invalid JSON format in message")

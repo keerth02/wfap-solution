@@ -25,6 +25,11 @@ def generate_signature(message_content: Dict[str, Any], secret_key: str) -> str:
         # Convert message to JSON string (sorted keys for consistency)
         message_str = json.dumps(message_content, sort_keys=True, separators=(',', ':'))
         
+        print(f"🔐 SIGNATURE GENERATION:")
+        print(f"   📝 Message Type: {message_content.get('message_type', 'unknown')}")
+        print(f"   🔑 Secret Key Length: {len(secret_key)} characters")
+        print(f"   📏 Message Length: {len(message_str)} characters")
+        
         # Generate HMAC signature
         signature = hmac.new(
             secret_key.encode('utf-8'),
@@ -33,10 +38,13 @@ def generate_signature(message_content: Dict[str, Any], secret_key: str) -> str:
         ).digest()
         
         # Return base64 encoded signature
-        return base64.b64encode(signature).decode('utf-8')
+        b64_signature = base64.b64encode(signature).decode('utf-8')
+        
+        print(f"   ✅ Generated Signature: {b64_signature[:16]}...{b64_signature[-8:]}")
+        return b64_signature
         
     except Exception as e:
-        print(f"❌ SIGNATURE: Error generating signature: {e}")
+        print(f"❌ SIGNATURE GENERATION ERROR: {e}")
         return ""
 
 
@@ -53,14 +61,28 @@ def validate_signature(message_content: Dict[str, Any], signature: str, secret_k
         True if signature is valid, False otherwise
     """
     try:
+        print(f"🔐 SIGNATURE VALIDATION:")
+        print(f"   📝 Message Type: {message_content.get('message_type', 'unknown')}")
+        print(f"   🔑 Received Signature: {signature[:16]}...{signature[-8:]}")
+        print(f"   🔑 Secret Key Length: {len(secret_key)} characters")
+        
         # Generate expected signature
         expected_signature = generate_signature(message_content, secret_key)
         
+        print(f"   🔑 Expected Signature: {expected_signature[:16]}...{expected_signature[-8:]}")
+        
         # Use constant-time comparison to prevent timing attacks
-        return hmac.compare_digest(signature, expected_signature)
+        is_valid = hmac.compare_digest(signature, expected_signature)
+        
+        if is_valid:
+            print(f"   ✅ VALIDATION RESULT: SIGNATURES MATCH")
+        else:
+            print(f"   ❌ VALIDATION RESULT: SIGNATURES DO NOT MATCH")
+            
+        return is_valid
         
     except Exception as e:
-        print(f"❌ SIGNATURE: Error validating signature: {e}")
+        print(f"❌ SIGNATURE VALIDATION ERROR: {e}")
         return False
 
 

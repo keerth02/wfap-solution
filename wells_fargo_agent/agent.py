@@ -75,7 +75,10 @@ class WellsFargoAgent:
             signature = generate_signature(message_content, secret_key)
             message_content['signature'] = signature
             
-            print(f"🔐 WELLS FARGO: Added signature to message")
+            print(f"🔐 WELLS FARGO: SIGNATURE ADDED TO MESSAGE")
+            print(f"   📝 Message Type: {message_content.get('message_type', 'offer_response')}")
+            print(f"   🔑 Signature: {signature[:16]}...{signature[-8:]}")
+            print(f"   ✅ Status: SUCCESS")
             return message_content
             
         except Exception as e:

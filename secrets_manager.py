@@ -60,9 +60,15 @@ class SecretsManager:
         """
         secret = self._secrets.get(agent_id)
         if secret:
-            print(f"🔐 SECRETS: Retrieved secret for agent {agent_id}")
+            print(f"🔐 SECRETS: SECRET KEY RETRIEVED")
+            print(f"   👤 Agent ID: {agent_id}")
+            print(f"   🔑 Key Length: {len(secret)} characters")
+            print(f"   ✅ Status: SUCCESS")
         else:
-            print(f"❌ SECRETS: No secret found for agent {agent_id}")
+            print(f"❌ SECRETS: SECRET KEY NOT FOUND")
+            print(f"   👤 Agent ID: {agent_id}")
+            print(f"   📋 Available Agents: {list(self._secrets.keys())}")
+            print(f"   ❌ Status: FAILED")
         return secret
     
     def has_agent(self, agent_id: str) -> bool:

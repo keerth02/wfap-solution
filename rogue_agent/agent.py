@@ -1013,8 +1013,10 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                             "id": f"negotiation-{uuid.uuid4().hex[:8]}",
                             "method": "message/send",
                             "params": {
+                                "id": f"negotiation-{uuid.uuid4().hex[:8]}",
                                 "message": {
-                                    "id": f"negotiation-{uuid.uuid4().hex[:8]}",
+                                    "messageId": f"negotiation-{uuid.uuid4().hex[:8]}",
+                                    "role": "user",
                                     "parts": [
                                         {
                                             "type": "text",

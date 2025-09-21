@@ -280,7 +280,10 @@ class CompanyAgent:
             signature = generate_signature(message_content, secret_key)
             message_content['signature'] = signature
             
-            print(f"🔐 COMPANY: Added signature to message")
+            print(f"🔐 COMPANY: SIGNATURE ADDED TO MESSAGE")
+            print(f"   📝 Message Type: {message_content.get('message_type', 'unknown')}")
+            print(f"   🔑 Signature: {signature[:16]}...{signature[-8:]}")
+            print(f"   ✅ Status: SUCCESS")
             return message_content
             
         except Exception as e:
@@ -1132,8 +1135,10 @@ Would you like to negotiate on any of these line of credit parameters with {bank
                             "id": f"negotiation-{uuid.uuid4().hex[:8]}",
                             "method": "message/send",
                             "params": {
+                                "id": f"negotiation-{uuid.uuid4().hex[:8]}",
                                 "message": {
-                                    "id": f"negotiation-{uuid.uuid4().hex[:8]}",
+                                    "messageId": f"negotiation-{uuid.uuid4().hex[:8]}",
+                                    "role": "user",
                                     "parts": [
                                         {
                                             "type": "text",
