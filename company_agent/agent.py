@@ -433,7 +433,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                     effective_rate = ((total_cost_of_borrowing / approved_amount) * 100) * (12 / term_months)
                     
                     # 4. ESG-adjusted effective rate
-                    esg_adjusted_effective_rate = effective_rate - (esg_score * 0.1)
+                    esg_adjusted_effective_rate = effective_rate
                     
                     # 5. Risk-adjusted score (penalize for collateral/personal guarantee requirements)
                     risk_penalty = 0
