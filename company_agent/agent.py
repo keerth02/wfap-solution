@@ -86,18 +86,89 @@ class CompanyAgent:
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
         """Evaluate the bank's counter-offer and decide whether to accept or reject."""
+        print(f"🔄 COMPANY AGENT: Evaluating counter-offer")
+        print(f"   📄 Counter-offer data length: {len(counter_offer_data)} characters")
+        
         try:
-            # Parse counter-offer data
+            # Parse counter-offer data with robust error handling
             if isinstance(counter_offer_data, str):
-                counter_offer = json.loads(counter_offer_data)
+                try:
+                    counter_offer = json.loads(counter_offer_data)
+                except json.JSONDecodeError as e:
+                    # Try to fix malformed JSON by cleaning up common issues
+                    print(f"JSON parsing error: {e}")
+                    print(f"Problematic JSON: {counter_offer_data[:200]}...")
+                    
+                    # Clean up the JSON string
+                    cleaned_json = counter_offer_data
+                    
+                    # Fix unescaped quotes in string values
+                    import re
+                    # Find string values and escape internal quotes
+                    def fix_string_quotes(match):
+                        key = match.group(1)
+                        value = match.group(2)
+                        # Escape quotes inside the value
+                        escaped_value = value.replace('"', '\\"')
+                        return f'"{key}": "{escaped_value}"'
+                    
+                    # Apply the fix to string values
+                    cleaned_json = re.sub(r'"([^"]+)":\s*"([^"]*)"([^"]*)"([^"]*)"', fix_string_quotes, cleaned_json)
+                    
+                    try:
+                        counter_offer = json.loads(cleaned_json)
+                    except json.JSONDecodeError:
+                        # If still failing, try to extract just the essential data
+                        try:
+                            # Look for key fields and extract them manually
+                            import re
+                            bank_name_match = re.search(r'"bank_name":\s*"([^"]+)"', counter_offer_data)
+                            interest_rate_match = re.search(r'"interest_rate":\s*([0-9.]+)', counter_offer_data)
+                            amount_match = re.search(r'"approved_amount":\s*([0-9.]+)', counter_offer_data)
+                            
+                            if bank_name_match and interest_rate_match and amount_match:
+                                # Create a minimal valid counter-offer structure
+                                counter_offer = {
+                                    "counter_offer": {
+                                        "bank_name": bank_name_match.group(1),
+                                        "interest_rate": float(interest_rate_match.group(1)),
+                                        "approved_amount": float(amount_match.group(1)),
+                                        "term_months": 60,  # Default
+                                        "origination_fee": 3000,  # Default
+                                        "esg_impact": {"overall_esg_score": 8.0}  # Default
+                                    },
+                                    "bank_name": bank_name_match.group(1),
+                                    "negotiation_id": "Unknown",
+                                    "negotiation_reasoning": "Counter-offer received"
+                                }
+                            else:
+                                return {
+                                    "status": "error",
+                                    "error": f"Failed to parse counter-offer JSON and extract key fields: {str(e)}"
+                                }
+                        except Exception as parse_error:
+                            return {
+                                "status": "error",
+                                "error": f"Failed to parse counter-offer JSON: {str(e)}. Parse error: {str(parse_error)}"
+                            }
             else:
                 counter_offer = counter_offer_data
             
-            original_offer_id = counter_offer.get("original_offer_id", "Unknown")
-            negotiation_id = counter_offer.get("negotiation_id", "Unknown")
-            bank_name = counter_offer.get("bank_name", "Unknown Bank")
-            counter_offer_details = counter_offer.get("counter_offer", {})
-            negotiation_reasoning = counter_offer.get("negotiation_reasoning", "")
+            # Handle different counter-offer formats
+            if counter_offer.get("counter_offer") == True:
+                # This is a single offer with counter_offer flag set to true
+                counter_offer_details = counter_offer
+                original_offer_id = counter_offer.get("offer_id", "Unknown")
+                negotiation_id = counter_offer.get("negotiation_id", "Unknown")
+                bank_name = counter_offer.get("bank_name", "Unknown Bank")
+                negotiation_reasoning = counter_offer.get("negotiation_reasoning", "")
+            else:
+                # This is a negotiation response with nested counter_offer
+                original_offer_id = counter_offer.get("original_offer_id", "Unknown")
+                negotiation_id = counter_offer.get("negotiation_id", "Unknown")
+                bank_name = counter_offer.get("bank_name", "Unknown Bank")
+                counter_offer_details = counter_offer.get("counter_offer", {})
+                negotiation_reasoning = counter_offer.get("negotiation_reasoning", "")
             
             # Extract key terms for evaluation
             interest_rate = counter_offer_details.get("interest_rate", 0)
@@ -157,7 +228,13 @@ class CompanyAgent:
                     "origination_fee": origination_fee,
                     "esg_score": esg_score,
                     "negotiation_reasoning": negotiation_reasoning
-                }
+                },
+                "bank_name": bank_name,
+                "interest_rate": interest_rate,
+                "approved_amount": approved_amount,
+                "term_months": term_months,
+                "origination_fee": origination_fee,
+                "esg_score": esg_score
             }
             
         except Exception as e:
@@ -193,17 +270,22 @@ WORKFLOW:
 5. If offers received, evaluate using evaluate_offers()
 6. Select best offer using select_best_offer()
 7. Optionally negotiate using negotiate_offer() with the selected bank
-8. If negotiation response received, evaluate using assess_counter_offer()
+8. If negotiation response received, IMMEDIATELY evaluate using assess_counter_offer()
 9. Make final decision: accept counter-offer or reject and seek new offers
 
 CRITICAL: After creating a credit intent, you MUST call send_credit_request_to_broker() with the intent data. Do not just describe what you would do - actually call the function.
+
+AUTOMATIC COUNTER-OFFER PROCESSING:
+- When you receive ANY response containing "counter_offer", "negotiation_id", or "negotiation_reasoning" fields, IMMEDIATELY call assess_counter_offer() without waiting for user input
+- Do not ask the user what to do - just call the function automatically
+- This ensures immediate evaluation of counter-offers for better user experience
 
 NEGOTIATION WORKFLOW:
 - After selecting the best offer, you can negotiate with that specific bank only
 - Use negotiate_offer(offer_id, negotiation_terms, offer_details) to send negotiation terms
 - IMPORTANT: Always include the complete offer_details as the third parameter (JSON string of the offer)
 - The broker will route negotiation requests ONLY to the selected bank
-- When you receive a counter-offer response, use assess_counter_offer() to assess it
+- When you receive a counter-offer response, IMMEDIATELY call assess_counter_offer() to assess it
 - Counter-offer evaluation considers: interest rate ≤ 6.0%, term ≥ 48 months, amount ≥ $800K, origination fee ≤ $3K, ESG score ≥ 7.0
 - Make final decision: ACCEPT (80%+ criteria met), CONSIDER (60-79% criteria met), or REJECT (<60% criteria met)
 
@@ -211,7 +293,8 @@ COUNTER-OFFER IDENTIFICATION:
 - Look for JSON responses containing: "counter_offer", "negotiation_id", "negotiation_reasoning"
 - Counter-offers come from banks after you send a negotiation request
 - They contain structured loan terms with updated rates, terms, amounts, or fees
-- ALWAYS use assess_counter_offer() for these responses, NOT handle_bank_questions()
+- IMMEDIATELY call assess_counter_offer() for these responses - do not wait for user input
+- NEVER use handle_bank_questions() for counter-offer responses
 
 DATA INTEGRITY REQUIREMENTS:
 - Only use information explicitly provided by the user
@@ -223,7 +306,7 @@ DATA INTEGRITY REQUIREMENTS:
 CONDITIONAL RESPONSES:
 - If banks ask for more information (text responses), use handle_bank_questions() to process them
 - If banks provide structured offers, use evaluate_offers() and select_best_offer()
-- If banks provide counter-offers (negotiation responses with "counter_offer" field), use assess_counter_offer() to assess them
+- If banks provide counter-offers (negotiation responses with "counter_offer" field), IMMEDIATELY use assess_counter_offer() to assess them
 - Counter-offers are identified by: "counter_offer" field, "negotiation_id" field, or "negotiation_reasoning" field
 - You may need to gather additional information from the user and resend to banks
 
@@ -804,6 +887,10 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
         """Send counter-offer for negotiation."""
+        print(f"🔄 COMPANY AGENT: Starting negotiation for offer {offer_id}")
+        print(f"   📋 Negotiation terms: {negotiation_terms}")
+        print(f"   📄 Offer details provided: {offer_details is not None}")
+        
         try:
             # Try to find the offer to negotiate
             target_offer = None
@@ -812,15 +899,21 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             if offer_details:
                 try:
                     target_offer = json.loads(offer_details)
-                except json.JSONDecodeError:
+                    print(f"   ✅ Successfully parsed offer details from parameter")
+                except json.JSONDecodeError as e:
+                    print(f"   ⚠️ Failed to parse offer details: {e}")
                     pass  # Fall back to received_offers search
             
             # If no offer_details or invalid JSON, search in received_offers
             if not target_offer:
+                print(f"   🔍 Searching in received_offers (count: {len(self.received_offers)})")
                 for offer in self.received_offers:
                     if offer.get("offer_id") == offer_id:
                         target_offer = offer
+                        print(f"   ✅ Found offer in received_offers")
                         break
+                if not target_offer:
+                    print(f"   ❌ Offer {offer_id} not found in received_offers")
             
             if not target_offer:
                 return {
@@ -838,6 +931,11 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                 "original_offer": target_offer,  # Include the complete original offer
                 "negotiation_timestamp": datetime.utcnow().isoformat()
             }
+            
+            print(f"   📤 COMPANY AGENT → BROKER: Sending negotiation request")
+            print(f"      🏦 Target Bank: {target_offer.get('bank_name')}")
+            print(f"      📋 Request ID: {offer_id}")
+            print(f"      🌐 Broker Endpoint: {self.broker_endpoint}")
             
             # Send negotiation request to broker for routing to specific bank
             async def _send_negotiation():
@@ -876,6 +974,9 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                 response = asyncio.run(_send_negotiation())
             
             if response.status_code == 200:
+                print(f"   ✅ COMPANY AGENT ← BROKER: Negotiation request successful (HTTP 200)")
+                print(f"      🏦 Bank: {target_offer.get('bank_name')}")
+                print(f"      📋 Offer ID: {offer_id}")
                 return {
                     "status": "success",
                     "negotiation_sent": True,
@@ -885,6 +986,8 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                     "message": f"Sent negotiation request to {target_offer.get('bank_name')} via broker"
                 }
             else:
+                print(f"   ❌ COMPANY AGENT ← BROKER: Negotiation request failed (HTTP {response.status_code})")
+                print(f"      📄 Response: {response.text}")
                 return {
                     "status": "error",
                     "error": f"Negotiation request failed: HTTP {response.status_code}",

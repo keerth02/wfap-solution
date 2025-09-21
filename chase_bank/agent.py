@@ -547,11 +547,22 @@ Always be helpful and professional in conversations, but ensure you eventually c
             message_data = json.loads(query)
             
             if message_data.get("action") == "negotiate_offer":
+                print(f"🔄 CHASE BANK: Received negotiation request")
+                print(f"   📋 Original Offer ID: {message_data.get('original_offer_id')}")
+                print(f"   🏢 Company: {message_data.get('company_name')}")
+                print(f"   📄 Negotiation Terms: {message_data.get('negotiation_terms')}")
+                
                 # Handle negotiation request directly
                 result = self.process_negotiation_request(query)
                 
                 if result["status"] == "success":
                     negotiation_response = result["negotiation_response"]
+                    print(f"   ✅ CHASE BANK: Generated counter-offer successfully")
+                    print(f"      💰 Amount: ${negotiation_response['counter_offer']['approved_amount']:,.0f}")
+                    print(f"      📈 Interest Rate: {negotiation_response['counter_offer']['interest_rate']}%")
+                    print(f"      📅 Term: {negotiation_response['counter_offer']['term_months']} months")
+                    print(f"      🏦 Counter-Offer ID: {negotiation_response['counter_offer']['offer_id']}")
+                    
                     yield {
                         'content': json.dumps(negotiation_response, indent=2),
                         'is_task_complete': True,
