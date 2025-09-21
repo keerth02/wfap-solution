@@ -132,7 +132,7 @@ class CompanyAgent:
                             import re
                             bank_name_match = re.search(r'"bank_name":\s*"([^"]+)"', counter_offer_data)
                             interest_rate_match = re.search(r'"interest_rate":\s*([0-9.]+)', counter_offer_data)
-                            amount_match = re.search(r'"approved_amount":\s*([0-9.]+)', counter_offer_data)
+                            amount_match = re.search(r'"approved_credit_limit":\s*([0-9.]+)', counter_offer_data)
                             
                             if bank_name_match and interest_rate_match and amount_match:
                                 # Create a minimal valid counter-offer structure
@@ -140,8 +140,9 @@ class CompanyAgent:
                                     "counter_offer": {
                                         "bank_name": bank_name_match.group(1),
                                         "interest_rate": float(interest_rate_match.group(1)),
-                                        "approved_amount": float(amount_match.group(1)),
-                                        "term_months": 60,  # Default
+                                        "approved_credit_limit": float(amount_match.group(1)),
+                                        "draw_period_months": 12,  # Default
+                                        "repayment_period_months": 24,  # Default
                                         "origination_fee": 3000,  # Default
                                         "esg_impact": {"overall_esg_score": 8.0}  # Default
                                     },
@@ -178,36 +179,38 @@ class CompanyAgent:
                 counter_offer_details = counter_offer.get("counter_offer", {})
                 negotiation_reasoning = counter_offer.get("negotiation_reasoning", "")
             
-            # Extract key terms for evaluation
+            # Extract key terms for evaluation (line of credit specific)
             interest_rate = counter_offer_details.get("interest_rate", 0)
-            term_months = counter_offer_details.get("term_months", 0)
-            approved_amount = counter_offer_details.get("approved_amount", 0)
+            approved_credit_limit = counter_offer_details.get("approved_credit_limit", 0)
+            draw_fee_percentage = counter_offer_details.get("draw_fee_percentage", 0)
+            unused_credit_fee = counter_offer_details.get("unused_credit_fee", 0)
             origination_fee = counter_offer_details.get("origination_fee", 0)
             esg_score = counter_offer_details.get("esg_impact", {}).get("overall_esg_score", 0)
             
-            # Company evaluation criteria
-            # Accept if: interest rate ≤ 6.0%, term ≥ 48 months, amount ≥ $800K, origination fee ≤ $3K, ESG score ≥ 7.0
-            acceptable_rate = interest_rate <= 6.0
-            acceptable_term = term_months >= 48
-            acceptable_amount = approved_amount >= 800000
-            acceptable_fee = origination_fee <= 3000
+            # Company evaluation criteria for line of credit
+            # Accept if: interest rate ≤ 6.5%, credit limit ≥ $1M, draw fee ≤ 0.6%, unused fee ≤ 0.3%, origination fee ≤ $5K, ESG score ≥ 7.0
+            acceptable_rate = interest_rate <= 6.5
+            acceptable_limit = approved_credit_limit >= 1000000
+            acceptable_draw_fee = draw_fee_percentage <= 0.6
+            acceptable_unused_fee = unused_credit_fee <= 0.3
+            acceptable_fee = origination_fee <= 5000
             acceptable_esg = esg_score >= 7.0
             
             # Calculate overall acceptability
-            criteria_met = sum([acceptable_rate, acceptable_term, acceptable_amount, acceptable_fee, acceptable_esg])
-            total_criteria = 5
+            criteria_met = sum([acceptable_rate, acceptable_limit, acceptable_draw_fee, acceptable_unused_fee, acceptable_fee, acceptable_esg])
+            total_criteria = 6
             acceptance_percentage = (criteria_met / total_criteria) * 100
             
             # Decision logic
             if acceptance_percentage >= 80:  # Accept if 80%+ criteria met
                 decision = "ACCEPT"
-                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Key benefits: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
+                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Key benefits: {interest_rate}% interest rate, ${approved_credit_limit:,.0f} credit limit, {draw_fee_percentage}% draw fee, {unused_credit_fee}% unused fee, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
             elif acceptance_percentage >= 60:  # Consider if 60-79% criteria met
                 decision = "CONSIDER"
-                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Mixed terms: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score. Consider negotiating further."
+                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Mixed terms: {interest_rate}% interest rate, ${approved_credit_limit:,.0f} credit limit, {draw_fee_percentage}% draw fee, {unused_credit_fee}% unused fee, ${origination_fee:,.0f} origination fee, {esg_score} ESG score. Consider negotiating further."
             else:  # Reject if <60% criteria met
                 decision = "REJECT"
-                reasoning = f"Counter-offer meets only {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Terms not favorable: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
+                reasoning = f"Counter-offer meets only {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Terms not favorable: {interest_rate}% interest rate, ${approved_credit_limit:,.0f} credit limit, {draw_fee_percentage}% draw fee, {unused_credit_fee}% unused fee, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
             
             # Store counter-offer for potential acceptance
             if decision == "ACCEPT":
@@ -220,8 +223,9 @@ class CompanyAgent:
                 "reasoning": reasoning,
                 "criteria_evaluation": {
                     "interest_rate_acceptable": acceptable_rate,
-                    "term_acceptable": acceptable_term,
-                    "amount_acceptable": acceptable_amount,
+                    "credit_limit_acceptable": acceptable_limit,
+                    "draw_fee_acceptable": acceptable_draw_fee,
+                    "unused_fee_acceptable": acceptable_unused_fee,
                     "origination_fee_acceptable": acceptable_fee,
                     "esg_score_acceptable": acceptable_esg,
                     "criteria_met": criteria_met,
@@ -231,16 +235,18 @@ class CompanyAgent:
                 "counter_offer_summary": {
                     "bank_name": bank_name,
                     "interest_rate": interest_rate,
-                    "term_months": term_months,
-                    "approved_amount": approved_amount,
+                    "approved_credit_limit": approved_credit_limit,
+                    "draw_fee_percentage": draw_fee_percentage,
+                    "unused_credit_fee": unused_credit_fee,
                     "origination_fee": origination_fee,
                     "esg_score": esg_score,
                     "negotiation_reasoning": negotiation_reasoning
                 },
                 "bank_name": bank_name,
                 "interest_rate": interest_rate,
-                "approved_amount": approved_amount,
-                "term_months": term_months,
+                "approved_credit_limit": approved_credit_limit,
+                "draw_fee_percentage": draw_fee_percentage,
+                "unused_credit_fee": unused_credit_fee,
                 "origination_fee": origination_fee,
                 "esg_score": esg_score
             }
@@ -361,12 +367,12 @@ class CompanyAgent:
             model=LiteLlm(model=LITELLM_MODEL),
             name='company_agent',
             description=(
-                'This agent handles corporate credit requests using A2A protocol communication. '
-                'It creates structured credit intents, sends them to banks via broker, evaluates offers, '
-                'and selects the best offer based on ESG and financial criteria.'
+                'This agent handles corporate line of credit requests using A2A protocol communication. '
+                'It creates structured credit intents, sends them to banks via broker, evaluates line of credit offers, '
+                'and selects the best offer based on ESG and financial criteria including draw fees and unused fees.'
             ),
             instruction="""
-You are a Company Agent responsible for managing corporate credit requests using A2A protocol communication.
+You are a Company Agent responsible for managing corporate line of credit requests using A2A protocol communication.
 
 CRITICAL: NEVER HALLUCINATE OR ASSUME INFORMATION. Always work with the exact data provided by the user and banks. Do not make up financial figures, company details, or bank responses.
 
@@ -375,11 +381,12 @@ WORKFLOW:
 2. IMMEDIATELY call send_credit_request_to_broker() with the intent data
 3. Receive responses from broker (may be offers or bank questions)
 4. If bank questions received, use handle_bank_questions() to process them
-5. If offers received, evaluate using evaluate_offers()
+5. If offers received, FIRST display a comparative view of all offers, THEN evaluate using evaluate_offers()
 6. Select best offer using select_best_offer()
-7. Optionally negotiate using negotiate_offer() with the selected bank
-8. If negotiation response received, IMMEDIATELY evaluate using assess_counter_offer()
-9. Make final decision: accept counter-offer or reject and seek new offers
+7. After selecting best offer, ask the user if they want to negotiate on line of credit parameters
+8. If user wants to negotiate, use negotiate_offer() with the selected bank
+9. If negotiation response received, IMMEDIATELY evaluate using assess_counter_offer()
+10. Make final decision: accept counter-offer or reject and seek new offers
 
 CRITICAL: After creating a credit intent, you MUST call send_credit_request_to_broker() with the intent data. Do not just describe what you would do - actually call the function.
 
@@ -394,13 +401,29 @@ NEGOTIATION WORKFLOW:
 - IMPORTANT: Always include the complete offer_details as the third parameter (JSON string of the offer)
 - The broker will route negotiation requests ONLY to the selected bank
 - When you receive a counter-offer response, IMMEDIATELY call assess_counter_offer() to assess it
-- Counter-offer evaluation considers: interest rate ≤ 6.0%, term ≥ 48 months, amount ≥ $800K, origination fee ≤ $3K, ESG score ≥ 7.0
+- Counter-offer evaluation considers: interest rate ≤ 6.5%, credit limit ≥ $1M, draw fee ≤ 0.6%, unused fee ≤ 0.3%, origination fee ≤ $5K, ESG score ≥ 7.0
 - Make final decision: ACCEPT (80%+ criteria met), CONSIDER (60-79% criteria met), or REJECT (<60% criteria met)
+
+NEGOTIATION PARAMETERS FOR LINE OF CREDIT:
+You can negotiate on these key parameters:
+- **Interest Rate**: Request lower rates (banks may reduce by 0.5-0.75%)
+- **Credit Limit**: Request higher limits (banks may increase by 10-15%)
+- **Draw Period**: Request longer draw periods (banks may extend by 6-12 months)
+- **Repayment Period**: Request longer repayment periods (banks may extend by 12-24 months)
+- **Draw Fee**: Request lower draw fees (banks may reduce by 0.1-0.15%)
+- **Unused Fee**: Request lower unused fees (banks may reduce by 0.05-0.08%)
+- **Origination Fee**: Request fee reductions (banks may reduce by 25-40%)
+
+NEGOTIATION STRATEGY:
+- Start with the most important parameter for your business needs
+- Be specific about requested values (e.g., "requested_interest_rate": 5.2, "requested_draw_period_months": 18, "requested_repayment_period_months": 30)
+- Consider multiple parameters simultaneously for better outcomes
+- Banks have different flexibility levels: Wells Fargo (conservative), Bank of America (flexible), Chase Bank (competitive)
 
 COUNTER-OFFER IDENTIFICATION:
 - Look for JSON responses containing: "counter_offer", "negotiation_id", "negotiation_reasoning"
 - Counter-offers come from banks after you send a negotiation request
-- They contain structured loan terms with updated rates, terms, amounts, or fees
+- They contain structured line of credit terms with updated rates, credit limits, draw fees, unused fees, or origination fees
 - IMMEDIATELY call assess_counter_offer() for these responses - do not wait for user input
 - NEVER use handle_bank_questions() for counter-offer responses
 
@@ -421,15 +444,16 @@ CONDITIONAL RESPONSES:
 COMPREHENSIVE OFFER EVALUATION (BASED ONLY ON STRUCTURED BANK OFFERS):
 - Primary Criterion: Composite Score (ESG-adjusted effective rate + risk penalties)
 - Secondary Criterion: ESG Impact Score (ESG score + carbon footprint reduction bonus)
-- Financial Analysis: Effective rate (including fees), total cost of borrowing, monthly payments
+- Financial Analysis: Effective rate (including draw fees, unused fees), total annual cost, credit limit adequacy
 - Risk Assessment: Collateral requirements, personal guarantee, prepayment penalties
 - ESG Analysis: ESG score, carbon footprint reduction, human-readable ESG summaries
+- Line of Credit Specific: Draw fees (draw_fee_percentage), unused credit fees (unused_credit_fee), credit limit vs. requested amount, draw availability
 
 EVALUATION METHODOLOGY:
 - Composite Score = ESG-adjusted effective rate + risk penalties
 - ESG Impact Score = ESG score + (carbon footprint reduction / 10)
 - Risk Penalties: Collateral (+0.5), Personal Guarantee (+0.3), Prepayment Penalty (+0.2)
-- Effective Rate includes origination fees and total cost of borrowing
+- Effective Rate includes draw fees, unused fees, origination fees and total annual cost
 - Sort by composite score (ascending) then ESG impact score (descending)
 
 CONSERVATIVE EVALUATION APPROACH:
@@ -443,11 +467,12 @@ DETAILED REASONING REQUIREMENTS:
 When providing reasoning for offer selection, you MUST include:
 
 1. FINANCIAL ANALYSIS BREAKDOWN:
-   - Base interest rate vs effective rate (including fees)
-   - Total cost of borrowing calculation
-   - Monthly payment impact on cash flow
+   - Base interest rate vs effective rate (including draw fees, unused fees)
+   - Total annual cost calculation (interest + draw fees + unused fees)
+   - Credit limit adequacy vs. requested amount
+   - Draw fee impact on frequent usage
+   - Unused fee impact on conservative usage
    - Origination fee impact on upfront costs
-   - Comparison of total interest paid over loan term
 
 2. ESG IMPACT ANALYSIS:
    - Detailed ESG score breakdown (0-10 scale)
@@ -488,8 +513,32 @@ RESPONSE HANDLING:
 RESPONSE HANDLING WORKFLOW:
 1. After sending intent to broker, check the response
 2. If you receive bank_questions, call handle_bank_questions tool
-3. If you receive offers, call evaluate_offers and select_best_offer
+3. If you receive offers, FIRST display comparative view, THEN call evaluate_offers and select_best_offer
 4. Always communicate clearly with the user about what happened
+
+COMPARATIVE OFFER DISPLAY:
+Before evaluating offers, ALWAYS display a brief comparative table showing:
+- Bank Name
+- Credit Limit ($)
+- Interest Rate (%)
+- Draw Fee (%)
+- Unused Fee (%)
+- Origination Fee ($)
+- ESG Score (/10)
+- Key Highlights
+
+Format as a clear table for easy comparison by the user.
+
+NEGOTIATION PROMPT AFTER BEST OFFER SELECTION:
+After selecting and displaying the best offer, ALWAYS ask the user:
+"Would you like to negotiate on any of these line of credit parameters with [Bank Name]?
+- Interest Rate (currently [X]%)
+- Credit Limit (currently $[X])
+- Draw Fee (currently [X]%)
+- Unused Fee (currently [X]%)
+- Origination Fee (currently $[X])
+
+Please let me know which parameters you'd like to negotiate and your target values."
 
 COMMUNICATION STANDARDS:
 - Use clear, professional language suitable for business executives
@@ -519,9 +568,10 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
         credit_score: int,
         years_in_business: int,
         employee_count: int,
-        requested_amount: float,
-        purpose: str,
-        preferred_term_months: int,
+        requested_credit_limit: float,
+        credit_purpose: str,
+        draw_period_months: int,
+        repayment_period_months: int,
         esg_requirements: str,
         preferred_interest_rate: float,
     ) -> Dict[str, Any]:
@@ -538,9 +588,10 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             
             credit_intent = CreditIntent(
                 company=company_info,
-                requested_amount=requested_amount,
-                purpose=purpose,
-                preferred_term_months=preferred_term_months,
+                requested_credit_limit=requested_credit_limit,
+                credit_purpose=credit_purpose,
+                draw_period_months=draw_period_months,
+                repayment_period_months=repayment_period_months,
                 esg_requirements=esg_requirements,
                 preferred_interest_rate=preferred_interest_rate
             )
@@ -732,7 +783,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
         offers_data: str,
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
-        """Evaluate received offers based ONLY on structured loan offer data from banks."""
+        """Evaluate received offers based ONLY on structured line of credit offer data from banks."""
         try:
             # Parse offers data - handle both string and list inputs
             if isinstance(offers_data, str):
@@ -754,6 +805,41 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                     "error": "No offers available for evaluation"
                 }
             
+            # First, display comparative view of all offers
+            print("\n📊 COMPARATIVE OFFER ANALYSIS")
+            print("=" * 80)
+            print(f"{'Bank':<15} {'Credit Limit':<15} {'Rate':<8} {'Draw Fee':<10} {'Unused Fee':<12} {'Orig Fee':<12} {'ESG':<6} {'Highlights'}")
+            print("-" * 80)
+            
+            for offer in offers:
+                bank_name = offer.get("bank_name", "Unknown Bank")
+                credit_limit = offer.get("approved_credit_limit", 0)
+                interest_rate = offer.get("interest_rate", 0)
+                draw_fee = offer.get("draw_fee_percentage", 0)
+                unused_fee = offer.get("unused_credit_fee", 0)
+                orig_fee = offer.get("origination_fee", 0)
+                esg_score = offer.get("esg_impact", {}).get("overall_esg_score", 0)
+                
+                # Create highlights
+                highlights = []
+                if interest_rate <= 5.5:
+                    highlights.append("Low Rate")
+                if credit_limit >= 2000000:
+                    highlights.append("High Limit")
+                if draw_fee <= 0.4:
+                    highlights.append("Low Draw Fee")
+                if unused_fee <= 0.2:
+                    highlights.append("Low Unused Fee")
+                if esg_score >= 8.0:
+                    highlights.append("High ESG")
+                
+                highlight_str = ", ".join(highlights[:2]) if highlights else "Standard"
+                
+                print(f"{bank_name:<15} ${credit_limit:>12,.0f} {interest_rate:>6.1f}% {draw_fee:>8.2f}% {unused_fee:>10.2f}% ${orig_fee:>10,.0f} {esg_score:>4.1f}/10 {highlight_str}")
+            
+            print("=" * 80)
+            print()
+            
             evaluated_offers = []
             
             for offer in offers:
@@ -762,9 +848,10 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                     base_rate = offer.get("interest_rate", 0)
                     esg_impact = offer.get("esg_impact", {})
                     esg_score = esg_impact.get("overall_esg_score", 0)
-                    approved_amount = offer.get("approved_amount", 0)
-                    term_months = offer.get("term_months", 84)
-                    repayment_schedule = offer.get("repayment_schedule", {})
+                    approved_credit_limit = offer.get("approved_credit_limit", 0)
+                    draw_fee_percentage = offer.get("draw_fee_percentage", 0)
+                    unused_credit_fee = offer.get("unused_credit_fee", 0)
+                    line_of_credit_schedule = offer.get("line_of_credit_schedule", {})
                     origination_fee = offer.get("origination_fee", 0)
                     prepayment_penalty = offer.get("prepayment_penalty", False)
                     collateral_required = offer.get("collateral_required", False)
@@ -775,14 +862,24 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                     # 1. Carbon-adjusted interest rate (ESG bonus)
                     carbon_adjusted_rate = base_rate - (esg_score * 0.15)  # Enhanced ESG bonus
                     
-                    # 2. Total cost of borrowing (including fees)
-                    monthly_rate = base_rate / 100 / 12
-                    monthly_payment = approved_amount * (monthly_rate * (1 + monthly_rate) ** term_months) / ((1 + monthly_rate) ** term_months - 1)
-                    total_interest = (monthly_payment * term_months) - approved_amount
-                    total_cost_of_borrowing = total_interest + origination_fee
+                    # 2. Total cost of borrowing (line of credit specific)
+                    # Assume 70% utilization of credit limit
+                    assumed_utilization = 0.7
+                    utilized_amount = approved_credit_limit * assumed_utilization
+                    unused_amount = approved_credit_limit * (1 - assumed_utilization)
+                    
+                    # Annual interest on utilized amount
+                    annual_interest = utilized_amount * (base_rate / 100)
+                    
+                    # Annual fees
+                    annual_draw_fees = utilized_amount * (draw_fee_percentage / 100) * 4  # Assume 4 draws per year
+                    annual_unused_fee = unused_amount * (unused_credit_fee / 100)
+                    
+                    total_annual_cost = annual_interest + annual_draw_fees + annual_unused_fee
+                    total_cost_of_borrowing = total_annual_cost + origination_fee
                     
                     # 3. Effective interest rate (including fees)
-                    effective_rate = ((total_cost_of_borrowing / approved_amount) * 100) * (12 / term_months)
+                    effective_rate = (total_annual_cost / approved_credit_limit) * 100 if approved_credit_limit > 0 else 0
                     
                     # 4. ESG-adjusted effective rate
                     esg_adjusted_effective_rate = effective_rate
@@ -811,8 +908,12 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                         "composite_score": round(composite_score, 2),
                         "esg_impact_score": round(esg_impact_score, 2),
                         "risk_penalty": round(risk_penalty, 2),
-                        "monthly_payment": round(monthly_payment, 2),
-                        "total_interest": round(total_interest, 2),
+                        "annual_interest": round(annual_interest, 2),
+                        "annual_draw_fees": round(annual_draw_fees, 2),
+                        "annual_unused_fee": round(annual_unused_fee, 2),
+                        "total_annual_cost": round(total_annual_cost, 2),
+                        "utilized_amount": round(utilized_amount, 2),
+                        "unused_amount": round(unused_amount, 2),
                         "evaluation_timestamp": datetime.utcnow().isoformat()
                     }
                     
@@ -882,7 +983,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             bank_name = best_offer.get('bank_name', 'Unknown Bank')
             composite_score = best_offer.get('composite_score', 'N/A')
             esg_impact_score = best_offer.get('esg_impact_score', 'N/A')
-            approved_amount = best_offer.get('approved_amount', 0)
+            approved_amount = best_offer.get('approved_credit_limit', 0)
             interest_rate = best_offer.get('interest_rate', 'N/A')
             effective_rate = best_offer.get('effective_rate', 'N/A')
             monthly_payment = best_offer.get('monthly_payment', 0)
@@ -894,7 +995,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             
             reasoning_parts = []
             reasoning_parts.append(f"🏆 **SELECTED OFFER: {bank_name.upper()}**")
-            reasoning_parts.append(f"💰 Approved Amount: ${approved_amount:,.0f}")
+            reasoning_parts.append(f"💰 Approved Credit Limit: ${approved_amount:,.0f}")
             reasoning_parts.append(f"📈 Base Interest Rate: {interest_rate}%")
             reasoning_parts.append(f"💳 Effective Rate (with fees): {effective_rate}%")
             reasoning_parts.append(f"📅 Monthly Payment: ${monthly_payment:,.2f}")
@@ -923,31 +1024,51 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                     other_bank = offer.get('bank_name', f'Bank {i}')
                     other_composite = offer.get('composite_score', 'N/A')
                     other_effective = offer.get('effective_rate', 'N/A')
-                    other_amount = offer.get('approved_amount', 0)
+                    other_amount = offer.get('approved_credit_limit', 0)
                     reasoning_parts.append(f"   • {other_bank}: ${other_amount:,.0f} at {other_effective}% effective rate (composite score: {other_composite})")
             
             # Add ESG summary if available
             if best_offer.get("esg_impact", {}).get("esg_summary"):
                 reasoning_parts.append(f"\n🌍 **ESG SUMMARY:** {best_offer['esg_impact']['esg_summary']}")
             
-            # Add repayment schedule if available
-            repayment_schedule = best_offer.get("repayment_schedule", {})
-            if repayment_schedule:
-                schedule_type = repayment_schedule.get("type", "monthly")
-                amount_per_period = repayment_schedule.get("amount_per_period", monthly_payment)
-                number_of_periods = repayment_schedule.get("number_of_periods", best_offer.get("term_months", 0))
-                reasoning_parts.append(f"\n📋 **REPAYMENT SCHEDULE:** {schedule_type.title()} payments of ${amount_per_period:,.2f} for {number_of_periods} periods")
+            # Add line of credit schedule if available
+            loc_schedule = best_offer.get("line_of_credit_schedule", {})
+            if loc_schedule:
+                draw_period = loc_schedule.get("draw_period_months", 0)
+                repayment_period = loc_schedule.get("repayment_period_months", 0)
+                min_interest = loc_schedule.get("minimum_interest_payment", 0)
+                draw_availability = loc_schedule.get("draw_availability_schedule", "anytime")
+                credit_review = loc_schedule.get("credit_review_frequency", "annually")
+                reasoning_parts.append(f"\n📋 **LINE OF CREDIT SCHEDULE:** {draw_period} months draw period, {repayment_period} months repayment, minimum interest payment ${min_interest:,.2f}, draws available {draw_availability}, credit review {credit_review}")
             
             # Add final recommendation
             reasoning_parts.append(f"\n✅ **RECOMMENDATION:** Accept the {bank_name} offer for the best combination of financial terms, ESG impact, and risk profile based on comprehensive evaluation of structured offer data.")
+            
+            # Add negotiation prompt
+            draw_fee = best_offer.get("draw_fee_percentage", 0)
+            unused_fee = best_offer.get("unused_credit_fee", 0)
+            origination_fee = best_offer.get("origination_fee", 0)
+            
+            negotiation_prompt = f"""
+🤝 **NEGOTIATION OPPORTUNITY**
+
+Would you like to negotiate on any of these line of credit parameters with {bank_name}?
+📊 **Current Offer Terms:**
+- Interest Rate: {interest_rate}%
+- Credit Limit: ${approved_amount:,.0f}
+- Draw Fee: {draw_fee}%
+- Unused Fee: {unused_fee}%
+- Origination Fee: ${origination_fee:,.0f}
+"""
             
             return {
                 "status": "success",
                 "best_offer": best_offer,
                 "reasoning": reasoning_parts,
+                "negotiation_prompt": negotiation_prompt,
                 "selection_summary": {
                     "selected_bank": bank_name,
-                    "approved_amount": approved_amount,
+                    "approved_credit_limit": approved_amount,
                     "base_interest_rate": interest_rate,
                     "effective_rate": effective_rate,
                     "composite_score": composite_score,
@@ -993,9 +1114,9 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                 questions_summary.append(f"🏦 {bank_name.upper()}: {question_text}")
             
             # Create comprehensive response for user
-            user_message = "The banks have requested additional information to process your loan application:\n\n"
+            user_message = "The banks have requested additional information to process your line of credit application:\n\n"
             user_message += "\n".join(questions_summary)
-            user_message += "\n\nPlease provide the requested information so I can send it to the banks and get you proper loan offers."
+            user_message += "\n\nPlease provide the requested information so I can send it to the banks and get you proper line of credit offers."
             
             return {
                 "status": "success",

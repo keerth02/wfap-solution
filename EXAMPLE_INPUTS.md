@@ -1,23 +1,23 @@
-# Example Inputs for Company Agent
+# Example Inputs for Company Agent - Line of Credit
 
-This file contains example natural language inputs that you can provide to the Company Agent to generate credit intents. The agent will extract the relevant information and create structured credit requests.
+This file contains example natural language inputs that you can provide to the Company Agent to generate line of credit intents. The agent will extract the relevant information and create structured credit requests.
 
-## Example 1: Technology Company - Equipment Purchase
-
-```
-Hi, I'm the CFO of TechCorp Inc, a technology company that's been in business for 8 years. We have 200 employees and our annual revenue is $15 million. Our credit score is 780. We need a $2 million loan to purchase new equipment for our manufacturing facility. We'd prefer a 60-month term with an interest rate around 5.5%. We're committed to renewable energy and carbon reduction initiatives as part of our ESG goals.
-```
-
-## Example 2: Healthcare Company - Working Capital
+## Example 1: Technology Company - Working Capital Line of Credit
 
 ```
-We're MedTech Solutions, a healthcare company with 150 employees. We've been operating for 6 years and have annual revenue of $12 million. Our credit score is 750. We need $1.5 million in working capital for a 48-month term. We're looking for competitive rates and are focused on sustainability and environmental impact reduction in our operations.
+Hi, I'm the CFO of TechCorp Inc, a technology company that's been in business for 8 years. We have 200 employees and our annual revenue is $15 million. Our credit score is 780. We need a $2 million line of credit for working capital needs. We'd like to be able to draw funds over 12 months and repay over 24 months. We expect to use about 70% of the credit line. We're committed to renewable energy and carbon reduction initiatives as part of our ESG goals.
 ```
 
-## Example 3: Manufacturing Company - Expansion
+## Example 2: Healthcare Company - Seasonal Line of Credit
 
 ```
-I represent GreenManufacturing Co, a manufacturing company that's been in business for 10 years. We have 300 employees and $25 million in annual revenue. Our credit score is 720. We need $3 million for facility expansion over 72 months. We're committed to environmental sustainability and carbon footprint reduction as part of our corporate values.
+We're MedTech Solutions, a healthcare company with 150 employees. We've been operating for 6 years and have annual revenue of $12 million. Our credit score is 750. We need a $1.5 million line of credit for seasonal working capital needs. We'd like to draw funds over 6 months and repay over 18 months. We expect to use about 60% of the credit line during peak seasons. We're looking for competitive rates and are focused on sustainability and environmental impact reduction in our operations.
+```
+
+## Example 3: Manufacturing Company - Inventory Line of Credit
+
+```
+I represent GreenManufacturing Co, a manufacturing company that's been in business for 10 years. We have 300 employees and $25 million in annual revenue. Our credit score is 720. We need a $3 million line of credit for inventory financing. We'd like to draw funds over 18 months and repay over 36 months. We expect to use about 80% of the credit line for seasonal inventory needs. We're committed to environmental sustainability and carbon footprint reduction as part of our corporate values.
 ```
 
 ## Example 4: Startup Company - Growth Capital
@@ -72,9 +72,10 @@ The Company Agent will extract the following information from your natural langu
 - **Credit Score**: Your business credit score (300-850)
 - **Years in Business**: How long your company has been operating
 - **Employee Count**: Number of employees
-- **Requested Amount**: The loan amount you need
-- **Purpose**: What you'll use the loan for
-- **Preferred Term**: Desired loan duration in months
+- **Requested Credit Limit**: The credit line amount you need
+- **Credit Purpose**: What you'll use the line of credit for
+- **Draw Period**: How long you need to draw funds (in months)
+- **Repayment Period**: How long you need to repay (in months)
 - **Preferred Interest Rate**: Your target interest rate
 - **ESG Requirements**: Your sustainability and environmental goals
 
@@ -82,8 +83,8 @@ The Company Agent will extract the following information from your natural langu
 
 1. **Be Specific**: Include exact numbers for revenue, credit score, employee count, etc.
 2. **Mention ESG Goals**: Include your sustainability and environmental commitments
-3. **State Your Preferences**: Mention preferred terms, rates, and loan duration
-4. **Provide Context**: Explain your company's background and loan purpose
+3. **State Your Preferences**: Mention preferred credit limits, rates, and draw/repayment periods
+4. **Provide Context**: Explain your company's background and line of credit purpose
 5. **Be Complete**: Include all relevant financial and business information
 
 ## What Happens Next

@@ -145,7 +145,7 @@ curl -X POST http://localhost:8003 \
         "parts": [
           {
             "type": "text",
-            "text": "I need a credit line for my tech company. We are TechCorp Inc, a technology company with $5M annual revenue, 750 credit score, 8 years in business, 50 employees. We need $2M for equipment purchase, prefer 36-month term, ESG requirements include renewable energy and carbon reduction, preferred interest rate under 8%."
+            "text": "I need a credit line for my tech company. We are TechCorp Inc, a technology company with $5M annual revenue, 750 credit score, 8 years in business, 50 employees. We need $2M credit limit for equipment purchase, prefer 12-month draw period and 24-month repayment period, ESG requirements include renewable energy and carbon reduction, preferred interest rate under 8%."
           }
         ]
       }
@@ -173,7 +173,7 @@ curl -X POST http://localhost:8001 \
         "parts": [
           {
             "type": "text",
-            "text": "{\"intent_id\": \"test-001\", \"company\": {\"name\": \"TechCorp Inc\", \"industry\": \"Technology\", \"annual_revenue\": 5000000, \"credit_score\": 750, \"years_in_business\": 8, \"employee_count\": 50}, \"requested_amount\": 2000000, \"purpose\": \"Equipment purchase\", \"preferred_term_months\": 36, \"esg_requirements\": \"Renewable energy and carbon reduction\", \"preferred_interest_rate\": 7.5}"
+            "text": "{\"intent_id\": \"test-001\", \"company\": {\"name\": \"TechCorp Inc\", \"industry\": \"Technology\", \"annual_revenue\": 5000000, \"credit_score\": 750, \"years_in_business\": 8, \"employee_count\": 50}, \"requested_credit_limit\": 2000000, \"credit_purpose\": \"Equipment purchase\", \"draw_period_months\": 12, \"repayment_period_months\": 24, \"esg_requirements\": \"Renewable energy and carbon reduction\", \"preferred_interest_rate\": 7.5}"
           }
         ]
       }
@@ -213,9 +213,10 @@ The company agent evaluates offers based on:
     "years_in_business": 8,
     "employee_count": 50
   },
-  "requested_amount": 2000000,
-  "purpose": "Equipment purchase",
-  "preferred_term_months": 36,
+  "requested_credit_limit": 2000000,
+  "credit_purpose": "Equipment purchase",
+  "draw_period_months": 12,
+  "repayment_period_months": 24,
   "esg_requirements": "Renewable energy focus",
   "preferred_interest_rate": 7.5
 }
@@ -228,17 +229,18 @@ The company agent evaluates offers based on:
   "offer_id": "unique-offer-id",
   "bank_name": "Wells Fargo",
   "bank_id": "wells-fargo",
-  "approved_amount": 2000000,
+  "approved_credit_limit": 2000000,
   "interest_rate": 6.75,
-  "term_months": 36,
-  "monthly_payment": 61234.56,
-  "total_interest": 204456.16,
+  "draw_period_months": 12,
+  "repayment_period_months": 24,
+  "draw_fee_percentage": 0.5,
+  "unused_credit_fee": 0.25,
   "esg_impact": {
     "score": 8.5,
     "summary": "Strong ESG profile with renewable energy focus",
     "carbon_reduction_potential": 15.2
   },
-  "repayment_schedule": [...],
+  "line_of_credit_schedule": {...},
   "created_at": "2024-01-01T00:00:00Z",
   "offer_complete": true
 }

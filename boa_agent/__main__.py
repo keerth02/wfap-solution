@@ -57,7 +57,7 @@ def main(host: str, port: int):
         name='Generate Bank Offer',
         description='Generate competitive bank offers with JWT signatures and innovation-focused terms',
         tags=['offer', 'terms', 'jwt', 'competitive'],
-        examples=['Generate credit offer', 'Create competitive loan terms'],
+        examples=['Generate credit offer', 'Create competitive line of credit terms'],
     )
     
     esg_assessment_skill = AgentSkill(

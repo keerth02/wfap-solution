@@ -141,7 +141,8 @@ class CompanyAgent:
                                         "bank_name": bank_name_match.group(1),
                                         "interest_rate": float(interest_rate_match.group(1)),
                                         "approved_amount": float(amount_match.group(1)),
-                                        "term_months": 60,  # Default
+                                        "draw_period_months": 12,  # Default
+                                        "repayment_period_months": 24,  # Default
                                         "origination_fee": 3000,  # Default
                                         "esg_impact": {"overall_esg_score": 8.0}  # Default
                                     },
@@ -201,13 +202,13 @@ class CompanyAgent:
             # Decision logic
             if acceptance_percentage >= 80:  # Accept if 80%+ criteria met
                 decision = "ACCEPT"
-                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Key benefits: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
+                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Key benefits: {interest_rate}% interest rate, ${approved_amount:,.0f} credit limit, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
             elif acceptance_percentage >= 60:  # Consider if 60-79% criteria met
                 decision = "CONSIDER"
-                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Mixed terms: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score. Consider negotiating further."
+                reasoning = f"Counter-offer meets {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Mixed terms: {interest_rate}% interest rate, ${approved_amount:,.0f} credit limit, ${origination_fee:,.0f} origination fee, {esg_score} ESG score. Consider negotiating further."
             else:  # Reject if <60% criteria met
                 decision = "REJECT"
-                reasoning = f"Counter-offer meets only {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Terms not favorable: {interest_rate}% interest rate, {term_months}-month term, ${approved_amount:,.0f} amount, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
+                reasoning = f"Counter-offer meets only {criteria_met}/{total_criteria} criteria ({acceptance_percentage:.0f}%). Terms not favorable: {interest_rate}% interest rate, ${approved_amount:,.0f} credit limit, ${origination_fee:,.0f} origination fee, {esg_score} ESG score."
             
             # Store counter-offer for potential acceptance
             if decision == "ACCEPT":
@@ -400,7 +401,7 @@ NEGOTIATION WORKFLOW:
 COUNTER-OFFER IDENTIFICATION:
 - Look for JSON responses containing: "counter_offer", "negotiation_id", "negotiation_reasoning"
 - Counter-offers come from banks after you send a negotiation request
-- They contain structured loan terms with updated rates, terms, amounts, or fees
+- They contain structured line of credit terms with updated rates, credit limits, draw fees, unused fees, or origination fees
 - IMMEDIATELY call assess_counter_offer() for these responses - do not wait for user input
 - NEVER use handle_bank_questions() for counter-offer responses
 
@@ -447,7 +448,7 @@ When providing reasoning for offer selection, you MUST include:
    - Total cost of borrowing calculation
    - Monthly payment impact on cash flow
    - Origination fee impact on upfront costs
-   - Comparison of total interest paid over loan term
+   - Comparison of total costs including draw fees, unused fees, and origination fees
 
 2. ESG IMPACT ANALYSIS:
    - Detailed ESG score breakdown (0-10 scale)
@@ -732,7 +733,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
         offers_data: str,
         tool_context: ToolContext = None
     ) -> Dict[str, Any]:
-        """Evaluate received offers based ONLY on structured loan offer data from banks."""
+        """Evaluate received offers based ONLY on structured line of credit offer data from banks."""
         try:
             # Parse offers data - handle both string and list inputs
             if isinstance(offers_data, str):
@@ -993,9 +994,9 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                 questions_summary.append(f"🏦 {bank_name.upper()}: {question_text}")
             
             # Create comprehensive response for user
-            user_message = "The banks have requested additional information to process your loan application:\n\n"
+            user_message = "The banks have requested additional information to process your line of credit application:\n\n"
             user_message += "\n".join(questions_summary)
-            user_message += "\n\nPlease provide the requested information so I can send it to the banks and get you proper loan offers."
+            user_message += "\n\nPlease provide the requested information so I can send it to the banks and get you proper line of credit offers."
             
             return {
                 "status": "success",

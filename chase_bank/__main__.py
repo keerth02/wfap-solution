@@ -57,7 +57,7 @@ def main(host: str, port: int):
         name='Generate Bank Offer',
         description='Generate structured bank offers with detailed terms',
         tags=['offer', 'terms'],
-        examples=['Generate credit offer', 'Create loan terms'],
+        examples=['Generate credit offer', 'Create line of credit terms'],
     )
     
     esg_assessment_skill = AgentSkill(
