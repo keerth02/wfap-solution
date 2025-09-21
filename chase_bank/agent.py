@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 # Add parent directory to path for protocols import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import authentication manager
-from auth_config import auth_manager, AUTH_CONFIG
+# Authentication removed - no longer needed
 
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -45,95 +44,13 @@ class ChaseBankAgent:
             memory_service=InMemoryMemoryService(),
         )
         
-        # Authentication
-        self._access_token = None
-        self._token_expires_at = None
-        self._client_config = AUTH_CONFIG["chase_bank"]
+        # Authentication removed - no longer needed
         
 
     def get_processing_message(self) -> str:
         return 'Chase Bank is evaluating your credit request...'
     
-    async def _authenticate_with_broker(self) -> bool:
-        """Authenticate with broker and get access token"""
-        print(f"🔐 CHASE BANK: Authenticating with broker")
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://localhost:8000/auth/token",
-                    json={
-                        "grant_type": "client_credentials",
-                        "client_id": self._client_config["client_id"],
-                        "client_secret": self._client_config["client_secret"]
-                    },
-                    timeout=30.0
-                )
-                
-                if response.status_code == 200:
-                    token_data = response.json()
-                    self._access_token = token_data["access_token"]
-                    self._token_expires_at = datetime.fromisoformat(token_data["expires_at"])
-                    
-                    print(f"✅ CHASE BANK: Authentication successful")
-                    print(f"   🔑 Token expires at: {self._token_expires_at}")
-                    auth_manager.log_auth_event("chase_authenticated", self._client_config["client_id"])
-                    return True
-                else:
-                    print(f"❌ CHASE BANK: Authentication failed (HTTP {response.status_code})")
-                    print(f"   📄 Response: {response.text}")
-                    auth_manager.log_auth_event("chase_auth_failed", self._client_config["client_id"], {
-                        "status_code": response.status_code,
-                        "response": response.text
-                    })
-                    return False
-                    
-        except Exception as e:
-            print(f"❌ CHASE BANK: Authentication error: {str(e)}")
-            auth_manager.log_auth_event("chase_auth_error", self._client_config["client_id"], {
-                "error": str(e)
-            })
-            return False
-    
-    async def _get_valid_token(self) -> Optional[str]:
-        """Get valid access token, refreshing if necessary"""
-        now = datetime.utcnow()
-        
-        # Check if token exists and is not expired
-        if self._access_token and self._token_expires_at and now < self._token_expires_at:
-            return self._access_token
-        
-        # Token is missing or expired, authenticate
-        print(f"🔄 CHASE BANK: Token missing/expired, authenticating...")
-        success = await self._authenticate_with_broker()
-        
-        if success:
-            return self._access_token
-        else:
-            print(f"❌ CHASE BANK: Failed to get valid token")
-            return None
-    
-    def _validate_incoming_token(self, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
-        """Validate Bearer token from incoming broker requests"""
-        auth_header = headers.get("Authorization") or headers.get("authorization")
-        
-        if not auth_header:
-            print(f"❌ CHASE BANK: No Authorization header provided")
-            return None
-        
-        if not auth_header.startswith("Bearer "):
-            print(f"❌ CHASE BANK: Invalid Authorization header format")
-            return None
-        
-        token = auth_header[7:]  # Remove "Bearer " prefix
-        payload = auth_manager.validate_token(token)
-        
-        if not payload:
-            print(f"❌ CHASE BANK: Invalid or expired token")
-            return None
-        
-        print(f"✅ CHASE BANK: Token validated for client_id: {payload['client_id']}")
-        return payload
+    # Authentication methods removed - no longer needed
 
 
 

@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 # Add parent directory to path for protocols import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import authentication manager
-from auth_config import auth_manager, AUTH_CONFIG
+# Authentication removed - no longer needed
 
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -45,10 +44,7 @@ class CompanyAgent:
             memory_service=InMemoryMemoryService(),
         )
         
-        # Authentication
-        self._access_token = None
-        self._token_expires_at = None
-        self._client_config = AUTH_CONFIG["company"]
+        # Authentication removed - no longer needed
         
         
         # Broker endpoint
@@ -255,105 +251,7 @@ class CompanyAgent:
     def get_processing_message(self) -> str:
         return 'Processing your credit request and communicating with banks...'
     
-    async def _authenticate_with_broker(self) -> bool:
-        """Authenticate with broker and get access token via A2A protocol"""
-        print(f"🔐 COMPANY AGENT: Authenticating with broker via A2A")
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                # Send authentication request via A2A protocol
-                auth_message = f"/auth/token {json.dumps({
-                    'grant_type': 'client_credentials',
-                    'client_id': 'rogue-agent',
-                    'client_secret': 'rogue-secret'
-                })}"
-                
-                response = await client.post(
-                    f"{self.broker_endpoint}",
-                    json={
-                        "jsonrpc": "2.0",
-                        "id": f"auth-{uuid.uuid4().hex[:8]}",
-                        "method": "message/send",
-                        "params": {
-                            "id": f"auth-task-{uuid.uuid4().hex[:8]}",
-                            "message": {
-                                "messageId": f"auth-msg-{uuid.uuid4().hex[:8]}",
-                                "role": "user",
-                                "parts": [
-                                    {
-                                        "type": "text",
-                                        "text": auth_message
-                                    }
-                                ]
-                            }
-                        }
-                    },
-                    timeout=30.0
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    if "result" in result and "artifacts" in result["result"]:
-                        artifacts = result["result"]["artifacts"]
-                        for artifact in artifacts:
-                            if artifact and "parts" in artifact:
-                                for part in artifact["parts"]:
-                                    if part.get("kind") == "text" and "text" in part:
-                                        try:
-                                            token_data = json.loads(part["text"])
-                                            self._access_token = token_data["access_token"]
-                                            self._token_expires_at = datetime.fromisoformat(token_data["expires_at"])
-                                            
-                                            print(f"✅ COMPANY AGENT: Authentication successful")
-                                            print(f"   🔑 Token expires at: {self._token_expires_at}")
-                                            auth_manager.log_auth_event("company_authenticated", self._client_config["client_id"])
-                                            return True
-                                        except json.JSONDecodeError as e:
-                                            print(f"❌ COMPANY AGENT: Failed to parse token response: {e}")
-                                            continue
-                    
-                    print(f"❌ COMPANY AGENT: No valid token found in response")
-                    auth_manager.log_auth_event("company_auth_failed", self._client_config["client_id"], {
-                        "response": result
-                    })
-                    return False
-                else:
-                    print(f"❌ COMPANY AGENT: Authentication failed (HTTP {response.status_code})")
-                    print(f"   📄 Response: {response.text}")
-                    auth_manager.log_auth_event("company_auth_failed", self._client_config["client_id"], {
-                        "status_code": response.status_code,
-                        "response": response.text
-                    })
-                    return False
-                    
-        except Exception as e:
-            print(f"❌ COMPANY AGENT: Authentication error: {str(e)}")
-            auth_manager.log_auth_event("company_auth_error", self._client_config["client_id"], {
-                "error": str(e)
-            })
-            return False
-    
-    async def _get_valid_token(self) -> Optional[str]:
-        """Get valid access token, refreshing if necessary"""
-        now = datetime.utcnow()
-        
-        # Check if token exists and is not expired
-        if self._access_token and self._token_expires_at and now < self._token_expires_at:
-            return self._access_token
-        
-        # Token is missing or expired, authenticate
-        print(f"🔄 COMPANY AGENT: Token missing/expired, authenticating...")
-        success = await self._authenticate_with_broker()
-        
-        if success:
-            return self._access_token
-        else:
-            print(f"❌ COMPANY AGENT: Failed to get valid token")
-            return None
-    
-    def _log_auth_attempt(self, action: str, details: Dict[str, Any] = None):
-        """Log authentication attempts"""
-        auth_manager.log_auth_event(f"company_{action}", self._client_config["client_id"], details)
+    # Authentication methods removed - no longer needed
 
     def _build_agent(self) -> LlmAgent:
         """Builds the LLM agent for the company agent."""
@@ -586,31 +484,18 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             # Convert other types to string and wrap
             intent_dict = {"raw_text": str(intent_data)}
         
-        # Send to broker via A2A - Send structured intent data with embedded authentication
+        # Send to broker via A2A - Send structured intent data (no authentication)
         async def _send_to_broker():
-            # Get valid access token
-            token = await self._get_valid_token()
-            if not token:
-                print(f"❌ COMPANY AGENT: Cannot send request - authentication failed")
-                return None
-            
-            # Create authenticated message content
-            authenticated_message = {
-                "auth_token": f"Bearer {token}",
-                "client_id": self._client_config["client_id"],
+            # Create message content (no authentication)
+            message_content = {
                 "message_type": "credit_intent",
+                "agent_id": "rogue-agent",
                 "data": intent_dict,
                 "timestamp": datetime.utcnow().isoformat()
             }
             
-            print(f"📤 COMPANY AGENT → BROKER: Sending authenticated credit request")
-            print(f"   🔐 Auth Token: {token[:20]}...")
-            print(f"   👤 Client ID: {self._client_config['client_id']}")
-            self._log_auth_attempt("sending_request", {
-                "endpoint": self.broker_endpoint,
-                "client_id": self._client_config["client_id"],
-                "message_type": "credit_intent"
-            })
+            print(f"📤 ROGUE AGENT → BROKER: Sending credit request")
+            print(f"   👤 Agent ID: rogue-agent")
             
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -627,7 +512,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                                 "parts": [
                                     {
                                         "type": "text",
-                                        "text": json.dumps(authenticated_message)
+                                        "text": json.dumps(message_content)
                                     }
                                 ]
                             }
@@ -1070,33 +955,19 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
             print(f"      📋 Request ID: {offer_id}")
             print(f"      🌐 Broker Endpoint: {self.broker_endpoint}")
             
-            # Send negotiation request to broker for routing to specific bank with embedded authentication
+            # Send negotiation request to broker for routing to specific bank (no authentication)
             async def _send_negotiation():
-                # Get valid access token
-                token = await self._get_valid_token()
-                if not token:
-                    print(f"❌ COMPANY AGENT: Cannot send negotiation - authentication failed")
-                    return None
-                
-                # Create authenticated negotiation message
-                authenticated_negotiation = {
-                    "auth_token": f"Bearer {token}",
-                    "client_id": self._client_config["client_id"],
+                # Create negotiation message (no authentication)
+                negotiation_message = {
                     "message_type": "negotiation_request",
+                    "agent_id": "rogue-agent",
                     "data": negotiation_request,
                     "timestamp": datetime.utcnow().isoformat()
                 }
                 
-                print(f"📤 COMPANY AGENT → BROKER: Sending authenticated negotiation request")
-                print(f"   🔐 Auth Token: {token[:20]}...")
-                print(f"   👤 Client ID: {self._client_config['client_id']}")
+                print(f"📤 ROGUE AGENT → BROKER: Sending negotiation request")
+                print(f"   👤 Agent ID: rogue-agent")
                 print(f"   🎯 Target Bank: {target_offer.get('bank_name')}")
-                self._log_auth_attempt("sending_negotiation", {
-                    "endpoint": self.broker_endpoint,
-                    "client_id": self._client_config["client_id"],
-                    "offer_id": offer_id,
-                    "target_bank": target_offer.get('bank_name')
-                })
                 
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
@@ -1111,7 +982,7 @@ Always provide comprehensive, detailed reasoning that demonstrates thorough anal
                                     "parts": [
                                         {
                                             "type": "text",
-                                            "text": json.dumps(authenticated_negotiation)
+                                            "text": json.dumps(negotiation_message)
                                         }
                                     ]
                                 }
