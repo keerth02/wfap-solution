@@ -1,29 +1,29 @@
 # WFAP Solution Requirements
-# Wells Fargo Agent Protocol Implementation
+# Working Capital Financing Platform - Multi-Agent System
 
 # Core A2A and ADK dependencies
-a2a-sdk>=0.3.0
-google-adk>=1.8.0
-google-genai>=1.27.0
+a2a-sdk
+google-adk
+google-genai
 
 # Data validation and serialization
-pydantic>=2.11.0
+pydantic
 
 # HTTP client for A2A communication
-httpx>=0.28.1
+httpx
 
 # Environment variable management
-python-dotenv>=1.1.0
+python-dotenv
 
 # ASGI server for running agents
-uvicorn>=0.34.0
+uvicorn
 
 # LLM integration
-litellm>=1.0.0
+tachyon-adk-client
 
 # CLI framework (used in __main__.py files)
-click>=8.0.0
+click
 
-# Additional useful dependencies
-starlette>=0.34.0
-fastapi>=0.104.0
+
+# Standard library dependencies (included with Python)
+# - hmac, hashlib, base64, json, os, sys, uuid, datetime, typing, asyncio, collections
